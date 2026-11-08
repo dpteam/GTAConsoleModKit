@@ -177,6 +177,23 @@ docs/GAME_IMAGES.md                 какие образы идентичны (
 docs/                               архитектура, форматы, логи, сессии, API, роадмап
 ```
 
+## Непрерывная сборка (GitHub Actions)
+
+`.github/workflows/build.yml` — то же, что локальный `tools\ci-test.ps1`, но на
+`windows-latest` и со стоковым `csc.exe` (никаких NuGet и MSBuild):
+
+| Шаг | Что делает |
+|---|---|
+| Toolchain | проверяет наличие `csc.exe` из .NET Framework 4.x |
+| Build and test | `tools\ci-test.ps1` — сборка + тесты форматов и веб-API |
+| Package | собирает zip: `ModKit.exe`, `public\`, `data\`, `config.example.ini`, `run.cmd`, `README`, `LICENSE` |
+| Upload artifact | `DPT.PSPModKit-win.zip` (и `logs` при падении) |
+| Release | по тегу `v*` прикладывает zip к релизу через `gh` |
+
+Тесты на реальных данных (LCS/VCS) в CI не запускаются: `refs/` в git не входит,
+поэтому проверяется самодостаточная часть набора форматов и весь веб-набор.
+Артефакт — готовый к запуску набор: распаковать и `run.cmd`.
+
 ## Сборка
 
 ```bat

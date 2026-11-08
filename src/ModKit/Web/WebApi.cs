@@ -239,6 +239,79 @@ namespace ModKit.Web
                     "op", op.ToJson()));
             }
 
+            if (tail == "folder" && request.Method == "POST")
+            {
+                Dictionary<string, object> body = BodyJson(request);
+                string path = Json.GetString(body, "path", "");
+                string asName = Json.GetString(body, "as", "");
+                string source = ResolveAnyPath(ctx, project, path);
+                if (source == null) return HttpResponse.Error(403, "path outside the allowed roots");
+
+                // a relative path is normally project-relative, but "add a folder from
+                // the game dumps" is the common case, so fall back to gamesRoot
+                if (!Directory.Exists(source) && !Path.IsPathRooted(path) &&
+                    !string.IsNullOrEmpty(ctx.GamesRoot))
+                {
+                    string fromGames = Util.SafeCombine(ctx.GamesRoot, path);
+                    if (fromGames != null && Directory.Exists(fromGames)) source = fromGames;
+                }
+                if (!Directory.Exists(source)) return HttpResponse.Error(400, "no such folder: " + path);
+                if (IsSameOrInside(project.FilesPath, source))
+                    return HttpResponse.Error(400, "that folder is already inside the project");
+
+                if (string.IsNullOrEmpty(asName)) asName = Path.GetFileName(source.TrimEnd('\\', '/'));
+                asName = asName.Replace('\\', '/').Trim('/');
+                if (string.IsNullOrEmpty(asName)) return HttpResponse.Error(400, "cannot derive a folder name");
+
+                string target = Util.SafeCombine(project.FilesPath, asName);
+                if (target == null) return HttpResponse.Error(403, "path traversal denied");
+
+                Util.CopyStats stats = Util.CopyTree(source, target);
+                Project.OpRecord op = project.AddOp(Json.GetString(body, "user", project.Owner),
+                    "import", asName + "/",
+                    stats.Files + " file(s), " + Util.HumanBytes(stats.Bytes));
+                project.Save();
+                ctx.Workspace.Sessions.NotifyChange(project.Id);
+                return HttpResponse.Json(Json.O("ok", true, "folder", asName, "files", (long)stats.Files,
+                    "folders", (long)stats.Folders, "bytes", stats.Bytes, "op", op.ToJson()));
+            }
+
+            if (tail == "mkdir" && request.Method == "POST")
+            {
+                string relative = Json.GetString(BodyJson(request), "path", "");
+                string target = Util.SafeCombine(project.FilesPath, relative);
+                if (target == null || string.IsNullOrEmpty(relative.Trim('/', '\\')))
+                    return HttpResponse.Error(403, "path traversal denied");
+                Directory.CreateDirectory(target);
+                ctx.Workspace.Sessions.NotifyChange(project.Id);
+                return HttpResponse.Json(Json.O("ok", true, "path", Util.ToRelative(project.FilesPath, target)));
+            }
+
+            if (tail == "delete" && request.Method == "POST")
+            {
+                Dictionary<string, object> body = BodyJson(request);
+                string relative = Json.GetString(body, "path", "").Trim('/', '\\');
+                if (string.IsNullOrEmpty(relative)) return HttpResponse.Error(400, "path is required");
+                string target = Util.SafeCombine(project.FilesPath, relative);
+                if (target == null) return HttpResponse.Error(403, "path traversal denied");
+                if (!target.StartsWith(Path.GetFullPath(project.FilesPath), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetFullPath(target), Path.GetFullPath(project.FilesPath),
+                        StringComparison.OrdinalIgnoreCase))
+                    return HttpResponse.Error(400, "refusing to delete the project root");
+
+                bool wasFolder = Directory.Exists(target);
+                if (wasFolder) Directory.Delete(target, true);
+                else if (File.Exists(target)) File.Delete(target);
+                else return HttpResponse.Error(404, "no such file or folder: " + relative);
+
+                Project.OpRecord op = project.AddOp(Json.GetString(body, "user", project.Owner),
+                    "delete", relative + (wasFolder ? "/" : ""), wasFolder ? "folder" : "file");
+                project.Save();
+                ctx.Workspace.Sessions.NotifyChange(project.Id);
+                return HttpResponse.Json(Json.O("ok", true, "path", relative, "folder", wasFolder,
+                    "op", op.ToJson()));
+            }
+
             if (tail == "file")
             {
                 string relative = ParseString(request, "path", "");
@@ -740,6 +813,15 @@ namespace ModKit.Web
             if (!fullRoot.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
                 fullRoot += Path.DirectorySeparatorChar;
             return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>True when <paramref name="path"/> is the project folder itself or below it.</summary>
+        private static bool IsSameOrInside(string root, string path)
+        {
+            string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+            string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar);
+            return string.Equals(fullRoot, fullPath, StringComparison.OrdinalIgnoreCase) ||
+                   Inside(fullPath, fullRoot);
         }
     }
 }

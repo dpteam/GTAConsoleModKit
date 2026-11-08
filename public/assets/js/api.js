@@ -46,6 +46,18 @@
     createProject: function (data) { return request('POST', '/api/projects', JSON.stringify(data)); },
     deleteProject: function (id) { return request('DELETE', '/api/projects/' + encode(id)); },
 
+    // working tree: add a folder recursively, create a folder, delete a file or folder
+    addFolder: function (id, path, as) {
+      return request('POST', '/api/projects/' + encode(id) + '/folder',
+        JSON.stringify({ path: path, as: as || '' }));
+    },
+    mkdir: function (id, path) {
+      return request('POST', '/api/projects/' + encode(id) + '/mkdir', JSON.stringify({ path: path }));
+    },
+    deletePath: function (id, path) {
+      return request('POST', '/api/projects/' + encode(id) + '/delete', JSON.stringify({ path: path }));
+    },
+
     ops: function (id, since) {
       return request('GET', '/api/projects/' + encode(id) + '/ops?since=' + (since || 0));
     },

@@ -1,0 +1,91 @@
+name: build
+
+# Builds with the stock .NET Framework 4.x csc.exe (no NuGet, no MSBuild), then
+# runs the format and web suites against the freshly built binary.
+#
+# Real-data tests (LCS/VCS dumps) live in refs/ which is not versioned, so a
+# clean checkout runs the self-contained half of the format suite and the whole
+# web suite. That is by design: CI must stay offline and reproducible.
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        shell: pwsh
+        run: |
+          $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          if (-not (Test-Path $csc)) { throw "csc.exe from .NET Framework 4.x not found" }
+          "csc: $csc"
+          (Get-Item $csc).VersionInfo.FileVersion
+          "PS: " + $PSVersionTable.PSVersion
+
+      - name: Build and test
+        shell: powershell
+        run: .\tools\ci-test.ps1
+
+      - name: Package
+        if: success()
+        shell: pwsh
+        run: |
+          # The zip is a ready-to-run kit: exe + web assets + model name tables.
+          # config.ini and workspace/ are runtime state (a config.ini holds the
+          # generated session/port settings), so they never ship - the server
+          # recreates config.ini from config.example.ini on first start.
+          $dist = "dist\DPT.PSPModKit"
+          New-Item -ItemType Directory -Path $dist -Force | Out-Null
+          Copy-Item bin\ModKit.exe $dist
+          Copy-Item bin\public  $dist -Recurse
+          Copy-Item bin\data    $dist -Recurse
+          Copy-Item config.example.ini $dist
+          Copy-Item run.cmd $dist
+          Copy-Item README.md $dist
+          Copy-Item LICENSE $dist
+
+          Compress-Archive -Path "$dist\*" -DestinationPath DPT.PSPModKit-win.zip -Force
+          Get-Item DPT.PSPModKit-win.zip | Select-Object Name, Length
+
+      - name: Upload artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DPT.PSPModKit-win
+          path: DPT.PSPModKit-win.zip
+          if-no-files-found: error
+
+      - name: Upload server logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            bin/logs
+            bin/workspace
+          if-no-files-found: ignore
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME DPT.PSPModKit-win.zip --title $env:GITHUB_REF_NAME --generate-notes
+          } else {
+            gh release upload $env:GITHUB_REF_NAME DPT.PSPModKit-win.zip --clobber
+          }

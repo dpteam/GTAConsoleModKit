@@ -164,6 +164,45 @@ namespace ModKit.Core
             return full.Replace('\\', '/');
         }
 
+        /// <summary>How much a folder copy moved.</summary>
+        public sealed class CopyStats
+        {
+            public int Files;
+            public long Bytes;
+            public int Folders;
+        }
+
+        /// <summary>
+        /// Copies a folder recursively, overwriting files that already exist.
+        /// A project holds a handful of edited assets, not a game install, so the
+        /// copy is plain and synchronous - no streaming, no temp files.
+        /// </summary>
+        public static CopyStats CopyTree(string source, string target)
+        {
+            var stats = new CopyStats();
+            CopyTreeInto(source, target, stats);
+            return stats;
+        }
+
+        private static void CopyTreeInto(string source, string target, CopyStats stats)
+        {
+            Directory.CreateDirectory(target);
+            stats.Folders++;
+
+            foreach (string file in Directory.GetFiles(source))
+            {
+                string destination = Path.Combine(target, Path.GetFileName(file));
+                File.Copy(file, destination, true);
+                stats.Files++;
+                stats.Bytes += new FileInfo(destination).Length;
+            }
+
+            foreach (string directory in Directory.GetDirectories(source))
+            {
+                CopyTreeInto(directory, Path.Combine(target, Path.GetFileName(directory)), stats);
+            }
+        }
+
         public static ulong Fnv1a64(string text)
         {
             ulong hash = 14695981039346656037UL;

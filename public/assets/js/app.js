@@ -20,7 +20,8 @@
     waiting: false,
     opsRenderCount: 0,
     logsFollow: true,
-    filter: ''
+    filter: '',
+    expanded: {}
   };
 
   var OP_DEFS = [
@@ -221,22 +222,127 @@
   function renderFiles() {
     var list = $('file-list');
     clear(list);
-    if (!state.files.length) {
+    if (!state.files || !state.files.length) {
       list.appendChild(el('div', 'empty', t('files.empty')));
       return;
     }
-    for (var i = 0; i < state.files.length; i++) {
+
+    var root = buildTree(state.files);
+    var tree = el('div', 'tree');
+    renderTree(root, tree, 0);
+    list.appendChild(tree);
+
+    var total = el('div', 'tree-total', t('files.count', state.files.length, fmtSize(totalBytes())));
+    list.appendChild(total);
+  }
+
+  function totalBytes() {
+    var sum = 0;
+    for (var i = 0; i < state.files.length; i++) sum += state.files[i].size || 0;
+    return sum;
+  }
+
+  /// Flat paths ("a/b/c.chk") into a folder tree: every level sorts folders first.
+  function buildTree(files) {
+    var root = { name: '', path: '', dirs: [], files: [], map: {} };
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      var parts = String(file.path).split('/');
+      var node = root;
+      var prefix = '';
+      for (var j = 0; j < parts.length - 1; j++) {
+        prefix = prefix ? prefix + '/' + parts[j] : parts[j];
+        var child = node.map[parts[j]];
+        if (!child) {
+          child = { name: parts[j], path: prefix, dirs: [], files: [], map: {} };
+          node.map[parts[j]] = child;
+          node.dirs.push(child);
+        }
+        node = child;
+      }
+      node.files.push(file);
+    }
+    sortTree(root);
+    return root;
+  }
+
+  function sortTree(node) {
+    node.dirs.sort(function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; });
+    node.files.sort(function (a, b) {
+      return String(a.path).toLowerCase() < String(b.path).toLowerCase() ? -1 : 1;
+    });
+    var count = node.files.length;
+    var bytes = 0;
+    for (var j = 0; j < node.files.length; j++) bytes += node.files[j].size || 0;
+    for (var i = 0; i < node.dirs.length; i++) {
+      sortTree(node.dirs[i]);
+      count += node.dirs[i].count;
+      bytes += node.dirs[i].bytes;
+    }
+    node.count = count;
+    node.bytes = bytes;
+  }
+
+  function isExpanded(path) {
+    return state.expanded[path] !== false;
+  }
+
+  function renderTree(node, container, depth) {
+    for (var i = 0; i < node.dirs.length; i++) {
+      (function (dir) {
+        var row = el('div', 'file dir');
+        row.style.paddingLeft = (4 + depth * 12) + 'px';
+        var caret = el('span', 'caret', isExpanded(dir.path) ? '▾' : '▸');
+        row.appendChild(caret);
+        row.appendChild(el('span', 'file-name', dir.name));
+        row.appendChild(el('span', 'file-count', String(dir.count)));
+        row.appendChild(deleteButton(dir.path, true));
+        row.addEventListener('click', function () {
+          state.expanded[dir.path] = !isExpanded(dir.path);
+          renderFiles();
+        });
+        container.appendChild(row);
+
+        if (isExpanded(dir.path)) renderTree(dir, container, depth + 1);
+      })(node.dirs[i]);
+    }
+
+    for (var k = 0; k < node.files.length; k++) {
       (function (file) {
         var row = el('div', 'file');
         if (state.selectedFile === file.path) row.classList.add('active');
+        row.style.paddingLeft = (4 + depth * 12) + 'px';
+        row.appendChild(el('span', 'file-indent'));
         var ext = file.path.indexOf('.') >= 0 ? file.path.split('.').pop() : '·';
         row.appendChild(el('span', 'file-ext', ext.substr(0, 4)));
-        row.appendChild(el('span', 'file-name', file.path));
+        row.appendChild(el('span', 'file-name', file.path.split('/').pop()));
         row.appendChild(el('span', 'file-size', fmtSize(file.size)));
+        row.appendChild(deleteButton(file.path, false));
         row.addEventListener('click', function () { inspectFile(file.path); });
-        list.appendChild(row);
-      })(state.files[i]);
+        container.appendChild(row);
+      })(node.files[k]);
     }
+  }
+
+  function deleteButton(path, isFolder) {
+    var button = el('button', 'file-del', '×');
+    button.title = t('files.delete');
+    button.addEventListener('click', function (event) {
+      event.stopPropagation();
+      var question = t('files.confirmDelete', path + (isFolder ? '/' : ''));
+      if (!global.confirm(question)) return;
+      API.deletePath(state.projectId, path).then(function () {
+        toast(t('files.deleted', path), 'ok');
+        if (state.selectedFile === path ||
+            (state.selectedFile && state.selectedFile.indexOf(path + '/') === 0)) {
+          state.selectedFile = null;
+          $('inspector').innerHTML = '<div class="empty">' + t('inspect.empty') + '</div>';
+          $('inspector-path').textContent = '';
+        }
+        refreshProject();
+      }).catch(fail);
+    });
+    return button;
   }
 
   function inspectFile(path) {
@@ -666,6 +772,51 @@
     next();
   }
 
+  // ---------------------------------------------------------- add folder
+
+  function toggleAddFolder(show) {
+    var box = $('add-folder-box');
+    if (show) {
+      box.classList.remove('hidden');
+      $('add-folder-path').focus();
+      return;
+    }
+    box.classList.add('hidden');
+    $('add-folder-path').value = '';
+    $('add-folder-as').value = '';
+  }
+
+  function addFolder() {
+    var path = $('add-folder-path').value.trim();
+    if (!path) { $('add-folder-path').focus(); return; }
+    var name = $('add-folder-as').value.trim();
+    var button = $('add-folder-run');
+    button.disabled = true;
+    API.addFolder(state.projectId, path, name).then(function (data) {
+      toast(t('files.added', data.folder, data.files, fmtSize(data.bytes)), 'ok');
+      global.Sound.play('ok');
+      toggleAddFolder(false);
+      refreshProject();
+    }, function (error) {
+      fail(error);
+    }).then(function () { button.disabled = false; });
+  }
+
+  function newFolder() {
+    var name = $('add-folder-as').value.trim();
+    if (!name) {
+      toast(t('files.nameRequired'), 'err');
+      $('add-folder-as').focus();
+      return;
+    }
+    API.mkdir(state.projectId, name).then(function (data) {
+      toast(t('files.created', data.path), 'ok');
+      toggleAddFolder(false);
+      state.expanded[data.path] = true;
+      refreshProject();
+    }).catch(fail);
+  }
+
   // ------------------------------------------------------------------- logs
 
   function refreshLogs() {
@@ -822,6 +973,20 @@
     $('file-input').addEventListener('change', function () {
       uploadFiles(this.files);
       this.value = '';
+    });
+
+    $('add-folder').addEventListener('click', function () {
+      toggleAddFolder($('add-folder-box').classList.contains('hidden'));
+    });
+    $('add-folder-run').addEventListener('click', addFolder);
+    $('new-folder-run').addEventListener('click', newFolder);
+    $('add-folder-cancel').addEventListener('click', function () { toggleAddFolder(false); });
+    $('add-folder-path').addEventListener('keydown', function (event) {
+      if (event.keyCode === 13) addFolder();
+    });
+    $('add-folder-as').addEventListener('keydown', function (event) {
+      if (event.keyCode === 13) addFolder();
+      if (event.keyCode === 27) toggleAddFolder(false);
     });
 
     $('session-join').addEventListener('click', joinSession);

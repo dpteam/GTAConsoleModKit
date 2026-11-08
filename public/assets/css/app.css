@@ -369,6 +369,70 @@ body[data-theme="oled"] .session-code { color: #9ccbf3; }
 .file-name { overflow: hidden; text-overflow: ellipsis; }
 .file-size { margin-left: auto; color: var(--text-soft); font-size: 10px; font-family: var(--mono); }
 
+/* ------------------------------------------------------------ file tree */
+
+.files-tools { display: flex; gap: 6px; margin-left: auto; align-items: center; }
+.files-tools .upload { margin-left: 0; }
+
+.add-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.add-folder input {
+  width: 100%;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+.add-folder-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.tree { display: flex; flex-direction: column; }
+.tree-total {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  color: var(--text-soft);
+  font-size: 10px;
+  font-family: var(--mono);
+}
+
+.file.dir { font-weight: 600; }
+.file .caret {
+  width: 10px;
+  flex: 0 0 10px;
+  color: var(--text-soft);
+  font-size: 9px;
+}
+.file .file-indent { width: 10px; flex: 0 0 10px; }
+.file .file-count {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: 9.5px;
+  font-family: var(--mono);
+}
+
+.file-del {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0;
+  transition: opacity .12s, color .12s;
+}
+.file:hover .file-del { opacity: 1; }
+.file-del:hover { color: #d9534f; }
+
 .upload { position: relative; overflow: hidden; margin-left: auto; }
 .upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .upload span {

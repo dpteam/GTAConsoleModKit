@@ -120,6 +120,57 @@ Check "file download returns exact bytes" {
     [System.Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray()) -eq "hello modkit"
 }
 
+# ------------------------------------------------------------ working tree
+
+Check "add folder copies a tree recursively" {
+    # the source must live inside an allowed root, so build it under the workspace
+    $ws = (Get-Json "/api/status").workspace
+    $source = Join-Path $ws ("ci-src-" + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    New-Item -ItemType Directory -Path (Join-Path $source 'a\b') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $source 'e') -Force | Out-Null
+    Set-Content -Path (Join-Path $source 'a\b\deep.txt') -Value 'deep' -NoNewline
+    Set-Content -Path (Join-Path $source 'top.txt') -Value 'top' -NoNewline
+    Set-Content -Path (Join-Path $source 'e\side.txt') -Value 'side' -NoNewline
+
+    $r = Post-Json ("/api/projects/" + $script:projectId + "/folder") @{ path = $source; as = 'added' }
+    $files = Get-Json ("/api/projects/" + $script:projectId + "/files")
+    $paths = @($files.files | ForEach-Object { $_.path })
+    Remove-Item -Recurse -Force $source -ErrorAction SilentlyContinue
+
+    $r.ok -eq $true -and $r.files -eq 3 -and
+        ($paths -contains 'added/a/b/deep.txt') -and
+        ($paths -contains 'added/top.txt') -and
+        ($paths -contains 'added/e/side.txt')
+}
+
+Check "mkdir creates a folder and delete removes it" {
+    $r = Post-Json ("/api/projects/" + $script:projectId + "/mkdir") @{ path = 'added/empty' }
+    $del = Post-Json ("/api/projects/" + $script:projectId + "/delete") @{ path = 'added/empty' }
+    $r.ok -eq $true -and $r.path -eq 'added/empty' -and $del.ok -eq $true -and $del.folder -eq $true
+}
+
+Check "delete removes a file and then the whole folder" {
+    $file = Post-Json ("/api/projects/" + $script:projectId + "/delete") @{ path = 'added/top.txt' }
+    $afterFile = Get-Json ("/api/projects/" + $script:projectId + "/files")
+    $gone = -not (@($afterFile.files | ForEach-Object { $_.path }) -contains 'added/top.txt')
+
+    $folder = Post-Json ("/api/projects/" + $script:projectId + "/delete") @{ path = 'added' }
+    $afterFolder = Get-Json ("/api/projects/" + $script:projectId + "/files")
+    $empty = @($afterFolder.files | Where-Object { $_.path -like 'added/*' }).Count -eq 0
+
+    $file.ok -eq $true -and $gone -and $folder.ok -eq $true -and $folder.folder -eq $true -and $empty
+}
+
+Check "delete and add folder guard the project root and traversal" {
+    $root = $false
+    $escape = $false
+    try { Post-Json ("/api/projects/" + $script:projectId + "/delete") @{ path = '' } | Out-Null }
+    catch { $root = $_.Exception.Response.StatusCode.value__ -in @(400, 403) }
+    try { Post-Json ("/api/projects/" + $script:projectId + "/delete") @{ path = '../../etc' } | Out-Null }
+    catch { $escape = $_.Exception.Response.StatusCode.value__ -in @(400, 403) }
+    $root -and $escape
+}
+
 # ---------------------------------------------------------------- sessions
 $clientId = $null
 
