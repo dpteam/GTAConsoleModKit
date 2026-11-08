@@ -412,7 +412,11 @@
 
     if (data.error) box.appendChild(el('div', 'empty', data.error));
 
-    if (data.textures && data.textures.length) {
+    if (data.imgEntries > 1) {
+      loadImgTextures(box);
+    }
+
+    if (data.textures && data.textures.length && !(data.imgEntries > 1)) {
       box.appendChild(el('h3', null, t('inspector.textures') + ' (' + data.textures.length + ')'));
       var grid = el('div', 'tex-grid');
       for (var i = 0; i < data.textures.length; i++) {
@@ -984,6 +988,114 @@
     }
     if (!$('build-label').value) $('build-label').value = 'DPT_MOD';
     renderBuildSummary();
+  }
+
+  // ----------------------------------------------------- textures inside an IMG
+
+  var TEX_PAGE = 120;   // tiles per "page": 3019 at once would kill the DOM
+
+  function loadImgTextures(box) {
+    var status = el('div', 'empty', t('tex.loading'));
+    box.appendChild(status);
+    var path = state.selectedFile;
+
+    API.imgTextures(state.projectId, path).then(function (data) {
+      if (status.parentNode) status.parentNode.removeChild(status);
+      if (state.selectedFile !== path) return;
+
+      var items = [];
+      var chunks = data.chunks || [];
+      for (var c = 0; c < chunks.length; c++) {
+        var chunk = chunks[c];
+        for (var t = 0; t < chunk.textures.length; t++) {
+          var texture = chunk.textures[t];
+          items.push({
+            entry: chunk.entry,
+            index: texture.index,
+            name: texture.name,
+            width: texture.width,
+            height: texture.height,
+            format: texture.format
+          });
+        }
+      }
+      renderTexGallery(box, path, items);
+    }).catch(function (error) {
+      status.textContent = error.message;
+    });
+  }
+
+  function renderTexGallery(box, path, items) {
+    var head = el('div', 'tex-head');
+    head.appendChild(el('h3', null, t('inspector.textures') + ' (' + items.length + ')'));
+    var search = document.createElement('input');
+    search.type = 'text';
+    search.className = 'tex-search';
+    search.placeholder = t('tex.search');
+    head.appendChild(search);
+    box.appendChild(head);
+
+    var counter = el('div', 'tex-count');
+    box.appendChild(counter);
+
+    var grid = el('div', 'tex-grid');
+    box.appendChild(grid);
+
+    var more = el('button', 'btn tiny tex-more hidden', t('tex.more'));
+    box.appendChild(more);
+
+    var shown = 0;
+
+    function filtered() {
+      var query = search.value.trim().toLowerCase();
+      if (!query) return items;
+      var result = [];
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if ((item.name || '').toLowerCase().indexOf(query) >= 0 ||
+            (item.entry || '').toLowerCase().indexOf(query) >= 0) {
+          result.push(item);
+        }
+      }
+      return result;
+    }
+
+    function reset() {
+      clear(grid);
+      shown = 0;
+      more.classList.remove('hidden');
+      appendPage();
+    }
+
+    function appendPage() {
+      var list = filtered();
+      var end = Math.min(list.length, shown + TEX_PAGE);
+      for (var i = shown; i < end; i++) {
+        (function (item) {
+          var card = el('div', 'tex-card');
+          var img = document.createElement('img');
+          img.loading = 'lazy';
+          img.decoding = 'async';
+          img.src = API.imgTextureUrl(state.projectId, path, item.entry, item.index, 96);
+          img.alt = item.name;
+          card.appendChild(img);
+          card.appendChild(el('div', 'tex-name', item.name || '# ' + item.index));
+          card.appendChild(el('div', 'tex-meta', item.width + '×' + item.height + ' ' + item.format));
+          card.title = item.entry + ' [' + item.index + ']';
+          card.addEventListener('click', function () {
+            window.open(API.imgTextureUrl(state.projectId, path, item.entry, item.index, 0), '_blank');
+          });
+          grid.appendChild(card);
+        })(list[i]);
+      }
+      shown = end;
+      counter.textContent = t('tex.showing', shown, list.length);
+      if (shown >= list.length) more.classList.add('hidden');
+    }
+
+    search.addEventListener('input', reset);
+    more.addEventListener('click', appendPage);
+    reset();
   }
 
   // ------------------------------------------------------------------- logs

@@ -549,8 +549,12 @@ namespace ModKit
         public static Outcome TexIndex(string image, string directory)
         {
             if (!File.Exists(image)) return Outcome.Fail("no such IMG: " + image);
+            return TexIndex(ImgArchive.Open(image, directory), image);
+        }
 
-            ImgArchive archive = ImgArchive.Open(image, directory);
+        /// <summary>Same as above for an archive that is already open (the web UI caches it).</summary>
+        public static Outcome TexIndex(ImgArchive archive, string image)
+        {
             var entries = new List<object>();
             int total = 0;
 

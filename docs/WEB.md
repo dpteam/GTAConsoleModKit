@@ -72,6 +72,23 @@
 | POST | `/api/projects/{id}/mkdir` | `{path}` — создать пустую папку |
 | POST | `/api/projects/{id}/delete` | `{path}` — убрать файл **или папку целиком** |
 | POST | `/api/projects/{id}/build` | `{base, target?, label?, compress?}` — собрать образ: дерево игры + файлы проекта |
+| GET | `/api/projects/{id}/img-textures?path=` | все текстуры всех чанков внутри IMG |
+| GET | `/api/projects/{id}/img-texture?path=&entry=&index=&w=` | PNG одной текстуры (`w` — ширина превью) |
+
+### Текстуры внутри IMG
+
+`img-textures` отдаёт `{ok, image, format, chunks:[{entry, sector, sectors, textures:[{index,name,width,height,format}]}], textures}`.
+Имена чанков берутся из `.DIR`, если он лежит рядом с IMG; иначе IMG сканируется по
+заголовкам чанков и чанки называются `tex_000123` / `mdl_000456` — этого достаточно,
+чтобы открыть галерею для голого образа из проекта.
+
+`img-texture` рендерит одну текстуру в PNG; `w=96` даёт превью нужной ширины
+(nearest-neighbour, чтобы палитровая графика не «мылилась»), `w` опущен — полный размер.
+Оба эндпоинта работают через один кэш на файл (`ImgCache`): открытие IMG стоит полного
+сканирования, а галерея просит по картинке на плитку.
+
+Замеры на `GTA3PSPHR.IMG` (38.3 МБ): индекс — **3 019 текстур в 582 чанках за 0.52 с**,
+первое превью 48 мс, следующие ~34 мс.
 
 `build` ставит в очередь задание `build-project` (ответ `202 {job, target, overrides}`),
 внутри — тот же `Operations.BuildImage`, что и у CLI: файлы берутся из `base`, а копии

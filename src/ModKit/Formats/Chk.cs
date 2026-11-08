@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -317,6 +318,43 @@ namespace ModKit.Formats
                 Directory.CreateDirectory(directory);
             using (Bitmap bitmap = Decode(texture))
                 bitmap.Save(outputPath, ImageFormat.Png);
+        }
+
+        /// <summary>
+        /// Texture as PNG bytes, optionally downscaled: the web UI shows a grid of
+        /// hundreds of 64-96 px thumbnails, and decoding a 512x256 texture only to
+        /// throw most of it away would cost both time and traffic.
+        /// Nearest-neighbour on purpose - PSP art is palette based and smoothed
+        /// thumbnails look like a different texture.
+        /// </summary>
+        public byte[] RenderPng(Texture texture, int maxWidth)
+        {
+            using (Bitmap bitmap = Decode(texture))
+            {
+                if (maxWidth <= 0 || bitmap.Width <= maxWidth)
+                    return ToPng(bitmap);
+
+                int height = Math.Max(1, (int)Math.Round(bitmap.Height * (double)maxWidth / bitmap.Width));
+                using (var scaled = new Bitmap(maxWidth, height, PixelFormat.Format32bppArgb))
+                {
+                    using (Graphics graphics = Graphics.FromImage(scaled))
+                    {
+                        graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+                        graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                        graphics.DrawImage(bitmap, 0, 0, maxWidth, height);
+                    }
+                    return ToPng(scaled);
+                }
+            }
+        }
+
+        private static byte[] ToPng(Bitmap bitmap)
+        {
+            using (var stream = new MemoryStream())
+            {
+                bitmap.Save(stream, ImageFormat.Png);
+                return stream.ToArray();
+            }
         }
 
         public int ExportAllPng(string outputDirectory)

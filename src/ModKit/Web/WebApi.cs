@@ -333,6 +333,47 @@ namespace ModKit.Web
                     "ops", Ops(project, 0, 200)));
             }
 
+            if (tail == "img-textures")
+            {
+                string relative = ParseString(request, "path", "");
+                string file = Util.SafeCombine(project.FilesPath, relative);
+                if (file == null) return HttpResponse.Error(403, "path traversal denied");
+                if (!File.Exists(file)) return HttpResponse.Error(404, "no such file: " + relative);
+
+                Dictionary<string, object> index;
+                try { index = ImgCache.Index(file); }
+                catch (Exception ex) { return HttpResponse.Error(400, "cannot read as an IMG: " + Log.Describe(ex)); }
+                if (index == null) return HttpResponse.Error(400, "cannot read as an IMG: " + relative);
+                index["ok"] = true;
+                return HttpResponse.Json(index);
+            }
+
+            if (tail == "img-texture")
+            {
+                string relative = ParseString(request, "path", "");
+                string entryName = ParseString(request, "entry", "");
+                int textureIndex = ParseInt(request, "index", 0, 0, 100000);
+                int width = ParseInt(request, "w", 0, 0, 2048);
+
+                string file = Util.SafeCombine(project.FilesPath, relative);
+                if (file == null) return HttpResponse.Error(403, "path traversal denied");
+                if (!File.Exists(file)) return HttpResponse.Error(404, "no such file: " + relative);
+
+                ImgArchive archive = ImgCache.Archive(file);
+                ImgArchive.Entry entry = archive.Find(entryName);
+                if (entry == null) return HttpResponse.Error(404, "no entry '" + entryName + "' in the IMG");
+
+                ChkFile chk = ChkFile.Parse(archive.ReadEntry(entry));
+                if (textureIndex >= chk.Textures.Count)
+                    return HttpResponse.Error(400, "texture index " + textureIndex + " is out of range (" +
+                        chk.Textures.Count + ")");
+
+                byte[] png = chk.RenderPng(chk.Textures[textureIndex], width);
+                HttpResponse response = HttpResponse.Bytes(png, "image/png");
+                response.Headers["Cache-Control"] = "private, max-age=120";
+                return response;
+            }
+
             if (tail == "build")
                 return BuildProject(ctx, request, project);
 
@@ -480,6 +521,22 @@ namespace ModKit.Web
                     "game", info.Game,
                     "openable", info.Openable,
                     "details", info.Details);
+
+                // Is it an archive of chunks rather than a single chunk? A packed
+                // IMG can start with a "tex" chunk and look like a CHK to the
+                // identifier, so the UI needs the entry count to tell them apart.
+                long length = 0;
+                try { length = new FileInfo(target).Length; } catch (Exception) { }
+                if ((info.Kind == "img" || info.Kind == "chk" || info.Kind == "mdl") &&
+                    length > 0 && length < 300L * 1024 * 1024)
+                {
+                    try { payload["imgEntries"] = (long)ImgCache.Archive(target).Entries.Count; }
+                    catch (Exception) { payload["imgEntries"] = 0L; }
+                }
+                else
+                {
+                    payload["imgEntries"] = 0L;
+                }
 
                 if (info.Kind == "chk")
                 {

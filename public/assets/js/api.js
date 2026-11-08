@@ -73,6 +73,13 @@
     mkdir: function (id, path) {
       return request('POST', '/api/projects/' + encode(id) + '/mkdir', JSON.stringify({ path: path }));
     },
+    imgTextures: function (id, path) {
+      return request('GET', '/api/projects/' + encode(id) + '/img-textures?path=' + encode(path));
+    },
+    imgTextureUrl: function (id, path, entry, index, width) {
+      return withToken('/api/projects/' + encode(id) + '/img-texture?path=' + encode(path) +
+        '&entry=' + encode(entry) + '&index=' + index + (width ? '&w=' + width : ''));
+    },
     buildProject: function (id, data) {
       return request('POST', '/api/projects/' + encode(id) + '/build', JSON.stringify(data || {}));
     },

@@ -301,6 +301,54 @@ Check "build-project packs project files over the base tree" {
     $ok -and (-not (Test-Path $tree))
 }
 
+Check "img gallery: a file that is not an archive yields no textures" {
+    $r = Get-Json ("/api/projects/" + $script:projectId + "/img-textures?path=docs/hello.txt")
+    $r.ok -eq $true -and $r.textures -eq 0
+}
+
+Check "img gallery: unknown chunk is 404" {
+    try {
+        Get-Json ("/api/projects/" + $script:projectId + "/img-texture?path=docs/hello.txt&entry=nope&index=0") | Out-Null
+        $false
+    } catch { $_.Exception.Response.StatusCode.value__ -eq 404 }
+}
+
+$loadsc = Join-Path (Split-Path -Parent $PSScriptRoot) 'refs\GAMES\extracted\LCS\PSP_GAME\USRDIR\TXD\LOADSC0.CHK'
+if (Test-Path $loadsc) {
+    Check "img gallery lists and renders a texture from a chunk archive" {
+        $exe = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\ModKit.exe'
+        $ws = (Get-Json "/api/status").workspace
+        $src = Join-Path $ws ("ci-gal-" + [Guid]::NewGuid().ToString('N').Substring(0, 6))
+        New-Item -ItemType Directory -Path $src -Force | Out-Null
+        Copy-Item $loadsc (Join-Path $src 'LOADSC0.CHK') -Force
+        $archive = Join-Path $src 'gal.img'
+        & $exe img-pack $src $archive | Out-Null
+
+        Invoke-RestMethod -Uri ($Base + "/api/projects/" + $script:projectId + "/upload?path=gal/gal.img") `
+            -Method Post -ContentType 'application/octet-stream' -Body ([System.IO.File]::ReadAllBytes($archive)) `
+            -UseBasicParsing | Out-Null
+
+        $index = Get-Json ("/api/projects/" + $script:projectId + "/img-textures?path=gal/gal.img")
+        $ok = ($index.textures -eq 1) -and ($index.chunks.Count -eq 1)
+
+        if ($ok) {
+            $entry = $index.chunks[0].entry
+            $png = Invoke-WebRequest -Uri ($Base + "/api/projects/" + $script:projectId +
+                "/img-texture?path=gal/gal.img&entry=" + [uri]::EscapeDataString($entry) + "&index=0&w=64") -UseBasicParsing
+            $bytes = $png.RawContentStream.ToArray()
+            $ok = $png.Headers['Content-Type'] -like 'image/png*' -and
+                  $bytes.Length -gt 500 -and
+                  $bytes[0] -eq 0x89 -and $bytes[1] -eq 0x50
+        }
+
+        Post-Json ("/api/projects/" + $script:projectId + "/delete") @{ path = 'gal' } | Out-Null
+        Remove-Item -Recurse -Force $src -ErrorAction SilentlyContinue
+        $ok
+    }
+} else {
+    Skip "img gallery lists and renders a texture" "no LOADSC0.CHK"
+}
+
 # -------------------------------------------------------------------- jobs
 Check "operation is queued as a job" {
     $r = Post-Json "/api/ops" @{

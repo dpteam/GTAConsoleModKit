@@ -148,15 +148,26 @@ namespace ModKit.Formats
                 data = Util.ReadExactly(stream, take);
             }
 
-            foreach (Rsl.ChunkRef chunk in Rsl.ScanChunks(data, 0, data.Length, Iso9660.SectorSize, 200000))
+            // A file that is not an archive at all (text, a short stub) must come back
+            // as "no entries" instead of throwing: callers then report a clean
+            // "raw (no index)" instead of an error.
+            try
             {
-                Entries.Add(new Entry
+                foreach (Rsl.ChunkRef chunk in Rsl.ScanChunks(data, 0, data.Length, Iso9660.SectorSize, 200000))
                 {
-                    OffsetSectors = chunk.Offset / Iso9660.SectorSize,
-                    SizeSectors = (chunk.Header.FileEnd + Iso9660.SectorSize - 1) / Iso9660.SectorSize,
-                    Name = chunk.Header.Ident.ToLowerInvariant() + "_" +
-                           (chunk.Offset / Iso9660.SectorSize).ToString("000000")
-                });
+                    Entries.Add(new Entry
+                    {
+                        OffsetSectors = chunk.Offset / Iso9660.SectorSize,
+                        SizeSectors = (chunk.Header.FileEnd + Iso9660.SectorSize - 1) / Iso9660.SectorSize,
+                        Name = chunk.Header.Ident.ToLowerInvariant() + "_" +
+                               (chunk.Offset / Iso9660.SectorSize).ToString("000000")
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(Cat.Fmt, "chunk scan found nothing usable in " +
+                                   System.IO.Path.GetFileName(Path) + ": " + Log.Describe(ex));
             }
             Log.Info(Cat.Fmt, "scanned " + Entries.Count + " chunks in " + System.IO.Path.GetFileName(Path));
         }
