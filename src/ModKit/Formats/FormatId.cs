@@ -39,8 +39,10 @@ namespace ModKit.Formats
 
             byte[] head;
             long length = Util.FileSize(path);
+            // Small game files are read whole: zlib sizes must be exact, not "first 64 KB".
+            int readSize = (int)Math.Min(length, length <= 64L * 1024 * 1024 ? length : 64 * 1024);
             using (var stream = File.OpenRead(path))
-                head = Util.ReadExactly(stream, (int)Math.Min(length, 64 * 1024));
+                head = Util.ReadExactly(stream, readSize);
 
             info.Details["size"] = length;
             info.Details["extension"] = System.IO.Path.GetExtension(path).TrimStart('.').ToLowerInvariant();

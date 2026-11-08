@@ -403,9 +403,20 @@ Notes
             Console.WriteLine((outcome.Ok ? "ok: " : "fail: ") + outcome.Message);
             foreach (var pair in outcome.Data)
             {
-                string value = pair.Value == null ? "" : pair.Value.ToString();
-                if (value.Length > 200) value = value.Substring(0, 197) + "...";
-                if (pair.Value is System.Collections.IList) value = "(list)";
+                string value;
+                if (pair.Value == null)
+                {
+                    value = "";
+                }
+                else if (pair.Value is System.Collections.IDictionary || pair.Value is System.Collections.IList)
+                {
+                    value = Json.Stringify(pair.Value, false);
+                }
+                else
+                {
+                    value = Convert.ToString(pair.Value, CultureInfo.InvariantCulture);
+                }
+                if (value.Length > 300) value = value.Substring(0, 297) + "...";
                 Console.WriteLine("  " + pair.Key + ": " + value);
             }
         }
