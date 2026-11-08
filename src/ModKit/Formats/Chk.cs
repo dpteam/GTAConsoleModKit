@@ -214,6 +214,19 @@ namespace ModKit.Formats
             if (length >= pixels * 2 * 0.9 && length <= pixels * 2 * 1.1 + 1024)
                 return hint == Rsl.TextureFormat.Unknown ? Rsl.TextureFormat.Rgb565 : hint;
 
+            // Direct colour with a mip chain: the descriptor flags say "16 bit" on
+            // retail LCS textures that are really 32 bit (e.g. black64a, 21964 bytes
+            // for 64x64 - that is 4 bytes per pixel plus mips, not 2). The length is
+            // the honest witness, the flags are only a hint.
+            long expected16 = SizeWithMips(Rsl.TextureFormat.Rgb565, texture.Width, texture.Height);
+            long expected32 = SizeWithMips(Rsl.TextureFormat.Rgba8888, texture.Width, texture.Height);
+            long diff16 = Math.Abs(length - expected16);
+            long diff32 = Math.Abs(length - expected32);
+            long tolerance = Math.Max(64, length / 20);
+            if (diff32 <= tolerance && diff32 < diff16) return Rsl.TextureFormat.Rgba8888;
+            if (diff16 <= tolerance && diff16 <= diff32)
+                return hint == Rsl.TextureFormat.Unknown ? Rsl.TextureFormat.Rgb565 : hint;
+
             // Ambiguous half/single byte ratios: paletted or DXT. The palette size is
             // the giveaway -- retail paletted textures always carry one.
             if (Math.Abs(length - (pixels / 2 + 64)) <= 16 || Math.Abs(length - (pixels / 2 + 1024)) <= 16)
@@ -234,6 +247,35 @@ namespace ModKit.Formats
             if (length >= dxt5 * 0.9 && length <= dxt5 * 1.1) return Rsl.TextureFormat.Dxt5;
 
             return hint == Rsl.TextureFormat.Unknown ? Rsl.TextureFormat.Pal8 : hint;
+        }
+
+        /// <summary>Bytes a format needs for one level, without palette.</summary>
+        private static long LevelBytes(Rsl.TextureFormat format, int width, int height)
+        {
+            long pixels = (long)width * height;
+            switch (format)
+            {
+                case Rsl.TextureFormat.Pal4: return pixels / 2;
+                case Rsl.TextureFormat.Pal8: return pixels;
+                case Rsl.TextureFormat.Dxt1: return pixels / 2;
+                case Rsl.TextureFormat.Dxt5: return pixels;
+                case Rsl.TextureFormat.Rgba8888: return pixels * 4;
+                default: return pixels * 2;             // rgb565 / rgba5551 / rgba4444
+            }
+        }
+
+        /// <summary>Base level plus the full mip chain down to 1x1.</summary>
+        private static long SizeWithMips(Rsl.TextureFormat format, int width, int height)
+        {
+            long total = LevelBytes(format, width, height);
+            int w = width, h = height;
+            while (w > 1 || h > 1)
+            {
+                w = Math.Max(1, w / 2);
+                h = Math.Max(1, h / 2);
+                total += LevelBytes(format, w, h);
+            }
+            return total;
         }
 
         // ------------------------------------------------------------- decode

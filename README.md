@@ -195,6 +195,7 @@ tools/build_modelnames.py           пересборка этих таблиц �
 tools/import_games.py               разбор архивов с образами (refs/GAMES)
 tools/prune_games.py                отпечатки данных, удаление дублей и мусора
 tools/render_manifest.py            перерисовать MANIFEST.md и снимок docs/GAME_IMAGES.md
+tools/verify_gallery.py             сверка галереи текстур с chk-export побайтово
 tools/firewall.cmd / .ps1           правило Windows Firewall (UAC) для морды
 tools/ci-test.ps1                   всё сразу: сборка, тесты, отчёт
 tools/test-formats.ps1              тест форматов на реальных данных (если они есть)

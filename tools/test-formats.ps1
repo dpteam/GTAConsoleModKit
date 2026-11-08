@@ -263,6 +263,18 @@ if (Test-Path $dtz) {
         (Test-Path (Join-Path $outdir 'player_mdl')) -or (Test-Path (Join-Path $outdir 'PLAYER.MDL'))
     }
 
+    Check "32-bit texture with a mip chain is not mistaken for 16-bit" {
+        # black64a in POLMAV.CHK is 21964 bytes for 64x64: 4 bytes per pixel plus the
+        # mip chain. The descriptor flags claim 16 bit, and trusting them decoded the
+        # texture into coloured noise.
+        $outdir = Join-Path $temp 'img-out'
+        $chunk = Join-Path $outdir 'POLMAV.CHK'
+        if (-not (Test-Path $chunk)) { $chunk = Join-Path $outdir 'polmav_chk' }
+        if (-not (Test-Path $chunk)) { return $false }
+        $out = Run @('chk-list', $chunk)
+        ($out -match 'black64a\s+64x64\s+rgba8888') -and ($out -notmatch 'rgb565')
+    }
+
     if (Test-Path $chk) {
         Check "img-repack keeps the image byte identical when nothing changed" {
             $outImg = Join-Path $temp 'same.img'

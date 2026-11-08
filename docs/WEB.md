@@ -90,6 +90,19 @@
 Замеры на `GTA3PSPHR.IMG` (38.3 МБ): индекс — **3 019 текстур в 582 чанках за 0.52 с**,
 первое превью 48 мс, следующие ~34 мс.
 
+Проверка `tools/verify_gallery.py` (эталон — `chk-export` по каждому из 585 CHK):
+
+```
+chunks with textures : 582 (extraction: 582)
+textures compared    : 3019 (extraction: 3019)
+chunks that differ   : 0
+chunks without textures: FINGERS.CHK, RADAR04.CHK, SUBGLASS.CHK  (пустые, fileEnd=64)
+RESULT: every texture matches byte for byte
+```
+
+`tools/verify_gallery_stats.py` дополнительно сверяет размеры PNG с заявленными и
+размеры превью: 3 019 из 3 019 — без расхождений.
+
 `build` ставит в очередь задание `build-project` (ответ `202 {job, target, overrides}`),
 внутри — тот же `Operations.BuildImage`, что и у CLI: файлы берутся из `base`, а копии
 из `files/` проекта их заменяют, дерево не копируется. Пустой `target` = папка
