@@ -15,6 +15,8 @@ namespace ModKit.Core
         public string LogsDirectory;
         public string WorkspaceRoot;
         public string GamesRoot;
+        public string Token;
+        public bool SessionOnly;
         public string Version;
         public DateTime StartedAt;
 

@@ -231,6 +231,36 @@ Check "session leave removes the participant" {
     (@($r.members | Where-Object { $_.nick -eq 'tester' })).Count -eq 0
 }
 
+# ---------------------------------------------------------------- auth
+# the gate: loopback never needs a token, other addresses do
+$tokenFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\auth.token'
+$lanIp = $null
+try {
+    $lanIp = [System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
+        Where-Object { $_.AddressFamily -eq 'InterNetwork' -and $_.IPAddressToString -notlike '127.*' } |
+        Select-Object -First 1 -ExpandProperty IPAddressToString
+} catch { }
+
+if ($lanIp -and (Test-Path $tokenFile)) {
+    $remote = "http://" + $lanIp + ":" + $Port
+
+    Check "requests from another address need a token" {
+        try { Invoke-RestMethod -Uri ($remote + '/api/status') -UseBasicParsing | Out-Null; $false }
+        catch { $_.Exception.Response.StatusCode.value__ -eq 401 }
+    }
+
+    Check "the same request with the token succeeds" {
+        $token = (Get-Content $tokenFile).Trim()
+        (Invoke-RestMethod -Uri ($remote + '/api/status?token=' + $token) -UseBasicParsing).ok -eq $true
+    }
+
+    Check "health stays open for monitors" {
+        (Invoke-RestMethod -Uri ($remote + '/api/health') -UseBasicParsing).ok -eq $true
+    }
+} else {
+    Skip "token gate" "no non-loopback IPv4 address or no bin\auth.token"
+}
+
 # -------------------------------------------------------------------- jobs
 Check "operation is queued as a job" {
     $r = Post-Json "/api/ops" @{

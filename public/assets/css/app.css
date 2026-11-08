@@ -162,6 +162,44 @@ body[data-theme="oled"] #lang option {
 
 /* --------------------------------------------------------------- layout */
 
+.auth-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 1400px;
+  margin: 10px auto 0;
+  padding: 8px 12px;
+  border: 1px solid #e0b34d;
+  border-radius: var(--radius-sm);
+  background: #fff7e0;
+  color: #6b4c00;
+  font-size: 12px;
+}
+.auth-bar input {
+  flex: 1 1 240px;
+  min-width: 180px;
+  padding: 4px 6px;
+  border: 1px solid #d7bc7a;
+  border-radius: var(--radius-sm);
+  background: #fffdf5;
+  color: #3a2a00;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+body[data-theme="dark"] .auth-bar,
+body[data-theme="oled"] .auth-bar {
+  background: #3a2f12;
+  border-color: #7a6424;
+  color: #f0d79a;
+}
+body[data-theme="dark"] .auth-bar input,
+body[data-theme="oled"] .auth-bar input {
+  background: #241d09;
+  border-color: #6b5a24;
+  color: #f4e3b6;
+}
+
 main {
   max-width: 1400px;
   margin: 0 auto;

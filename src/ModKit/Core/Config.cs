@@ -149,6 +149,14 @@ webPortFallbacks=44710,44720,44730
 ; 0.0.0.0 = reachable from the LAN (phone, second PC, team sessions)
 ; 127.0.0.1 = this machine only
 bind=0.0.0.0
+; access from other machines needs this token. Empty = generated once and kept in
+; bin\auth.token; requests from 127.0.0.1 never need it.
+token=
+; full    = token holders may do everything the kit can
+; session = token holders may only work inside projects (no arbitrary paths,
+;           no /api/fs browsing, no running operations). Use it when the kit is
+;           reachable through a reverse proxy.
+exposure=full
 ; how many HTTP workers serve requests
 workers=4
 

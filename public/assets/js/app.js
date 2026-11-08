@@ -93,8 +93,34 @@
   }
 
   function fail(error) {
+    if (error && error.auth === 'token') showAuthBar();
+    if (error && error.auth === 'session') toast(t('auth.sessionOnly'), 'warn');
     toast(t('toast.failed', error && error.message ? error.message : String(error)), 'err');
     global.Sound.play('error');
+  }
+
+  function showAuthBar() {
+    var bar = $('auth-bar');
+    if (!bar || !bar.classList.contains('hidden')) return;
+    bar.classList.remove('hidden');
+    var input = $('auth-token');
+    if (input && !input.value) {
+      try { input.value = localStorage.getItem('dpt.token') || ''; } catch (e) { }
+    }
+    if (input) input.focus();
+  }
+
+  function saveToken() {
+    var input = $('auth-token');
+    var value = input ? input.value.trim() : '';
+    if (!value) { if (input) input.focus(); return; }
+    try { localStorage.setItem('dpt.token', value); } catch (e) { }
+    var bar = $('auth-bar');
+    if (bar) bar.classList.add('hidden');
+    toast(t('auth.saved'), 'ok');
+    // everything that failed before needs fresh data
+    if (state.projectId) openProject(state.projectId);
+    else { refreshStatus(); refreshProjects(); }
   }
 
   // ------------------------------------------------------------------- nav
@@ -1096,6 +1122,11 @@
 
     $('session-join').addEventListener('click', joinSession);
     $('session-leave').addEventListener('click', leaveSession);
+
+    $('auth-save').addEventListener('click', saveToken);
+    $('auth-token').addEventListener('keydown', function (event) {
+      if (event.keyCode === 13) saveToken();
+    });
     $('note-send').addEventListener('click', sendNote);
     $('note-text').addEventListener('keydown', function (event) {
       if (event.keyCode === 13) sendNote();
@@ -1135,14 +1166,18 @@
     API.status().then(function (data) {
       state.status = data;
       renderStatus();
-    }).catch(function () { });
+    }).catch(function (error) {
+      if (error && error.auth === 'token') showAuthBar();
+    });
   }
 
   function refreshProjects() {
     API.projects().then(function (data) {
       state.projects = data.projects;
       renderProjects();
-    }).catch(function () { });
+    }).catch(function (error) {
+      if (error && error.auth === 'token') showAuthBar();
+    });
   }
 
   function refreshJobs() {

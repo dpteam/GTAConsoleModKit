@@ -3,6 +3,28 @@
 Базовый префикс — `/`. Ответы JSON (`{"ok": true, ...}` либо `{"ok": false, "error": "..."}`
 с соответствующим HTTP-кодом). Все ответы отдаются с `X-Content-Type-Options: nosniff`.
 
+## Кто может спрашивать
+
+| Источник | Условие | Что разрешено |
+|---|---|---|
+| `127.0.0.1` / `::1` | всегда | всё |
+| другая машина | `X-DPT-Token: <token>` или `?token=<token>` | `exposure=full` — всё; `exposure=session` — только проекты |
+| другая машина | без токена | `401 {auth:"token"}`, кроме `/api/health` |
+
+Токен: `server.token` в `config.ini`, иначе генерируется и хранится в `bin\auth.token`,
+печатается в консоль при старте. Морда спрашивает его один раз и держит в `localStorage`
+(`dpt.token`), а для `<img>`/`<audio>` подставляет в query, потому что заголовок туда
+не передать.
+
+`exposure=session` режет по сети всё, что не про проект:
+
+```
+разрешено : GET /api/projects, GET /api/projects/{id}/(files|ops|file|inspect|…),
+            POST …/upload, …/note, …/session/*
+запрещено : /api/fs, /api/identify, /api/logs, /api/status, POST /api/ops,
+            …/folder, …/mkdir, …/delete, DELETE /api/projects/{id}
+```
+
 ## Служебное
 
 | Метод | Путь | Ответ |

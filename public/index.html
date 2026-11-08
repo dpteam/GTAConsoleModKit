@@ -28,6 +28,12 @@
   </div>
 </header>
 
+<div class="auth-bar hidden" id="auth-bar">
+  <span data-i18n="auth.need">Этот сервер требует токен для доступа с других машин.</span>
+  <input type="text" id="auth-token" data-i18n-ph="auth.ph" placeholder="токен из консоли сервера (bin\auth.token)">
+  <button class="btn tiny" id="auth-save" data-i18n="auth.save">Войти</button>
+</div>
+
 <main>
 
   <!-- ============================ projects ============================ -->

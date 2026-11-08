@@ -149,9 +149,15 @@ namespace ModKit
 
             FsGuard.Configure(allowed);
 
+            context.Token = ModKit.Web.WebGuard.LoadToken(context.Config, baseDirectory);
+            context.SessionOnly = string.Equals(context.Config.Get("server.exposure", "full").Trim(),
+                "session", StringComparison.OrdinalIgnoreCase);
+
             Log.Info(Cat.Config, "workspace=" + workspaceRoot +
                                  (gamesRoot.Length > 0 ? ", gamesRoot=" + gamesRoot : ", gamesRoot=(unset)"));
             Log.Info(Cat.Config, "readable roots: " + FsGuard.Describe());
+            Log.Info(Cat.Config, "remote access: token " + context.Token +
+                                 (context.SessionOnly ? ", exposure=session" : ", exposure=full"));
             return context;
         }
 
@@ -212,6 +218,13 @@ namespace ModKit
             Console.WriteLine("  bind : " + _server.BindAddress + ":" + _server.Port +
                               "   workspace: " + _context.WorkspaceRoot);
             Console.WriteLine("  log  : " + (Log.CurrentFile ?? "(console only)"));
+            if (!string.IsNullOrEmpty(_context.Token))
+            {
+                Console.WriteLine("  token: " + _context.Token +
+                                  (_context.SessionOnly ? "   (exposure=session)" : ""));
+                if (_server.BindAddress != "127.0.0.1")
+                    Console.WriteLine("         other machines need this token once; 127.0.0.1 never does");
+            }
             Console.WriteLine();
             Console.WriteLine("  commands: status | logs | projects | code <id> | jobs | quit");
             Console.WriteLine();

@@ -22,6 +22,10 @@ namespace ModKit.Web
 
             try
             {
+                // who may ask: localhost always, other machines with the token
+                HttpResponse denied = WebGuard.Check(ctx, request);
+                if (denied != null) return denied;
+
                 if (path == "/api/health") return Health(ctx, server);
                 if (path == "/api/status") return Status(ctx, server);
                 if (path == "/api/logs") return Logs(request);
@@ -94,6 +98,8 @@ namespace ModKit.Web
                 "online", online,
                 "workspace", ctx.WorkspaceRoot,
                 "gamesRoot", ctx.GamesRoot,
+                "exposure", ctx.SessionOnly ? "session" : "full",
+                "tokenRequired", ctx.Token.Length > 0,
                 "logFile", Log.CurrentFile ?? "",
                 "jobs", (long)ctx.Pipeline.Recent(100).Count));
         }
