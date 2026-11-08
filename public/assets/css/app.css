@@ -431,6 +431,19 @@ body[data-theme="oled"] .session-code { color: #9ccbf3; }
 }
 .add-folder-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* ------------------------------------------------------ build from project */
+
+.build-panel { margin-bottom: 14px; }
+.build-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.build-row .field { flex: 1 1 240px; }
+.build-row .check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
+
 /* ---------------------------------------------------------- folder picker */
 
 .folder-picker {

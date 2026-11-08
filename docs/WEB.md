@@ -71,6 +71,12 @@
 | POST | `/api/projects/{id}/folder` | `{path, as}` — скопировать папку **рекурсивно** в проект |
 | POST | `/api/projects/{id}/mkdir` | `{path}` — создать пустую папку |
 | POST | `/api/projects/{id}/delete` | `{path}` — убрать файл **или папку целиком** |
+| POST | `/api/projects/{id}/build` | `{base, target?, label?, compress?}` — собрать образ: дерево игры + файлы проекта |
+
+`build` ставит в очередь задание `build-project` (ответ `202 {job, target, overrides}`),
+внутри — тот же `Operations.BuildImage`, что и у CLI: файлы берутся из `base`, а копии
+из `files/` проекта их заменяют, дерево не копируется. Пустой `target` = папка
+`export/` проекта, имя `<id>.iso` или `<id>.cso`.
 
 `folder.path` может быть абсолютным (внутри `workspace`/`gamesRoot`) или относительным:
 сначала он ищется в папке проекта, потом в `gamesRoot` — так «добавить папку из дерева

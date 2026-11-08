@@ -261,6 +261,45 @@ if ($lanIp -and (Test-Path $tokenFile)) {
     Skip "token gate" "no non-loopback IPv4 address or no bin\auth.token"
 }
 
+# ------------------------------------------------------- build from project
+Check "build-project packs project files over the base tree" {
+    $exe = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\ModKit.exe'
+    $ws = (Get-Json "/api/status").workspace
+    $tree = Join-Path $ws ("ci-base-" + [Guid]::NewGuid().ToString('N').Substring(0, 6))
+    New-Item -ItemType Directory -Path (Join-Path $tree 'PSP_GAME\USRDIR') -Force | Out-Null
+    Set-Content -Path (Join-Path $tree 'PSP_GAME\PARAM.SFO') -Value 'PARAM' -NoNewline
+    [System.IO.File]::WriteAllBytes((Join-Path $tree 'PSP_GAME\USRDIR\ORIG.BIN'), (New-Object byte[] 2048))
+
+    $bytes = New-Object byte[] 3000
+    (New-Object System.Random 7).NextBytes($bytes)
+    Invoke-RestMethod -Uri ($Base + "/api/projects/" + $script:projectId + "/upload?path=PSP_GAME/USRDIR/ORIG.BIN") `
+        -Method Post -ContentType 'application/octet-stream' -Body $bytes -UseBasicParsing | Out-Null
+
+    $out = Join-Path $ws ($script:projectId + "-ci.iso")
+    $r = Post-Json ("/api/projects/" + $script:projectId + "/build") @{ base = $tree; target = $out; label = 'CITEST' }
+    $state = ''
+    for ($i = 0; $i -lt 80; $i++) {
+        Start-Sleep -Milliseconds 250
+        $state = (Get-Json ("/api/jobs/" + $r.job.id)).job.state
+        if ($state -in @('done', 'failed', 'cancelled')) { break }
+    }
+
+    $ok = ($state -eq 'done') -and (Test-Path $out)
+    $extract = Join-Path $ws ($script:projectId + "-ci-out")
+    if ($ok) {
+        & $exe iso-extract $out $extract | Out-Null
+        $inside = [System.IO.File]::ReadAllBytes((Join-Path $extract 'PSP_GAME\USRDIR\ORIG.BIN'))
+        $ok = $inside.Length -eq $bytes.Length
+        if ($ok) {
+            for ($i = 0; $i -lt $bytes.Length; $i++) { if ($inside[$i] -ne $bytes[$i]) { $ok = $false; break } }
+        }
+    }
+
+    Remove-Item -Recurse -Force $tree, $extract -ErrorAction SilentlyContinue
+    Remove-Item -Force $out -ErrorAction SilentlyContinue
+    $ok
+}
+
 # -------------------------------------------------------------------- jobs
 Check "operation is queued as a job" {
     $r = Post-Json "/api/ops" @{

@@ -187,6 +187,37 @@
     </div>
 
     <div class="ptab" id="ptab-tools">
+      <div class="panel build-panel">
+        <div class="panel-head">
+          <h2 data-i18n="build.title">Собрать образ из проекта</h2>
+          <span class="muted" id="build-summary"></span>
+        </div>
+        <div class="panel-body">
+          <div class="build-row">
+            <label class="field grow">
+              <span data-i18n="build.base">Дерево игры (PSP_GAME внутри)</span>
+              <input id="build-base" type="text" placeholder="refs\GAMES\extracted\LCS">
+            </label>
+            <label class="field grow">
+              <span data-i18n="build.target">Куда писать (пусто = в export проекта)</span>
+              <input id="build-target" type="text" placeholder="MOD.iso">
+            </label>
+          </div>
+          <div class="build-row">
+            <label class="check">
+              <input type="checkbox" id="build-cso">
+              <span data-i18n="build.cso">Сразу в CSO</span>
+            </label>
+            <label class="field grow">
+              <span data-i18n="build.label">Метка тома</span>
+              <input id="build-label" type="text" placeholder="DPT_MOD">
+            </label>
+            <button class="btn" id="build-run" data-i18n="build.run">Собрать</button>
+          </div>
+          <p class="hint" data-i18n="build.hint">В образ попадут файлы из дерева игры, а файлы проекта заменят свои копии — дерево не копируется.</p>
+        </div>
+      </div>
+
       <div class="columns">
         <div class="panel grow">
           <div class="panel-head"><h2 data-i18n="ops.title">Быстрые операции</h2></div>

@@ -220,6 +220,77 @@ namespace ModKit.Web
             return result;
         }
 
+        /// <summary>
+        /// Packs the project into a playable image: the base game tree supplies the
+        /// files, the project's <c>files/</c> folder wins over them. That is the last
+        /// step of the modding loop, so it is one button in the UI instead of a
+        /// hand-typed override folder.
+        /// </summary>
+        private static HttpResponse BuildProject(ModKitContext ctx, HttpRequest request, Project project)
+        {
+            if (request.Method != "POST") return HttpResponse.Error(405, "POST only");
+            Dictionary<string, object> body = BodyJson(request);
+            string user = Json.GetString(body, "user", project.Owner);
+
+            string basePath = Json.GetString(body, "base", "");
+            if (string.IsNullOrEmpty(basePath)) return HttpResponse.Error(400, "base is required");
+
+            string baseTree = ResolveAnyPath(ctx, project, basePath);
+            if (baseTree == null || !Directory.Exists(baseTree))
+                return HttpResponse.Error(400, "no such folder: " + basePath +
+                    " (allowed roots: " + FsGuard.Describe() + ")");
+            if (!Directory.Exists(Path.Combine(baseTree, "PSP_GAME")))
+                return HttpResponse.Error(400, "the base folder has no PSP_GAME inside: " + basePath);
+
+            bool compress = Json.GetBool(body, "compress", false);
+            string label = Json.GetString(body, "label", "");
+            string requested = Json.GetString(body, "target", "");
+            string target;
+            if (!string.IsNullOrEmpty(requested))
+            {
+                target = ResolveOutputPath(ctx, project, requested);
+                if (target == null) return HttpResponse.Error(403, "target outside the allowed roots");
+            }
+            else
+            {
+                Directory.CreateDirectory(project.ExportPath);
+                target = Path.Combine(project.ExportPath, project.Id + (compress ? ".cso" : ".iso"));
+            }
+
+            if (!target.EndsWith(".cso", StringComparison.OrdinalIgnoreCase) &&
+                !target.EndsWith(".iso", StringComparison.OrdinalIgnoreCase))
+            {
+                if (compress) target += ".cso"; else target += ".iso";
+            }
+
+            string baseTreeCopy = baseTree;
+            string targetCopy = target;
+
+            Pipeline.Job job = ctx.Pipeline.Enqueue("build-project", "build-project", delegate(Pipeline.Job j)
+            {
+                Action<int> progress = delegate(int percent)
+                {
+                    j.Report(percent, "");
+                    if (j.CancelRequested) throw new OperationCanceledException();
+                };
+
+                Operations.Outcome outcome = Operations.BuildImage(baseTreeCopy, project.FilesPath,
+                    targetCopy, label, compress, progress);
+
+                j.Result = outcome.Data;
+                foreach (KeyValuePair<string, object> item in outcome.Data) j.Note(item.Key + " = " + item.Value);
+                if (!outcome.Ok) throw new InvalidOperationException(outcome.Message);
+                j.Note(outcome.Message);
+
+                project.AddOp(user, "build", Path.GetFileName(targetCopy), outcome.Message);
+                project.Save();
+                ctx.Workspace.Sessions.NotifyChange(project.Id);
+            });
+
+            return HttpResponse.Json(Json.O("ok", true, "job", job.ToJson(),
+                "target", target, "overrides", (long)project.ListFiles(0).Count), 202);
+        }
+
         private static HttpResponse CreateProject(ModKitContext ctx, HttpRequest request)
         {
             Dictionary<string, object> body = BodyJson(request);
@@ -261,6 +332,9 @@ namespace ModKit.Web
                     "files", project.ListFiles(2000),
                     "ops", Ops(project, 0, 200)));
             }
+
+            if (tail == "build")
+                return BuildProject(ctx, request, project);
 
             if (tail == "files")
                 return HttpResponse.Json(Json.O("ok", true, "files", project.ListFiles(5000)));

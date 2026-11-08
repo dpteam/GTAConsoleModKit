@@ -73,6 +73,9 @@
     mkdir: function (id, path) {
       return request('POST', '/api/projects/' + encode(id) + '/mkdir', JSON.stringify({ path: path }));
     },
+    buildProject: function (id, data) {
+      return request('POST', '/api/projects/' + encode(id) + '/build', JSON.stringify(data || {}));
+    },
     deletePath: function (id, path) {
       return request('POST', '/api/projects/' + encode(id) + '/delete', JSON.stringify({ path: path }));
     },

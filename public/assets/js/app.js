@@ -237,6 +237,8 @@
       $('session-code').textContent = data.project.code;
       showView('project');
       renderFiles();
+      initBuildPanel();
+      renderBuildSummary();
       renderOps(data.ops || []);
       renderSessionInfo();
       startSessionWait();
@@ -941,6 +943,49 @@
     addFolder(path, $('fp-manual-as').value.trim(), $('fp-manual-add'));
   }
 
+  // ---------------------------------------------------------- build project
+
+  function renderBuildSummary() {
+    var box = $('build-summary');
+    if (!box) return;
+    var count = state.files ? state.files.length : 0;
+    box.textContent = count
+      ? t('build.summary', count, fmtSize(totalBytes()))
+      : t('build.empty');
+  }
+
+  function runBuild() {
+    var base = ($('build-base').value || '').replace(/[\r\n]+/g, ' ').trim();
+    if (!base) { $('build-base').focus(); return; }
+    var button = $('build-run');
+    button.disabled = true;
+    try { localStorage.setItem('dpt.build.base', base); } catch (e) { }
+
+    API.buildProject(state.projectId, {
+      base: base,
+      target: $('build-target').value.trim(),
+      label: $('build-label').value.trim(),
+      compress: $('build-cso').checked
+    }).then(function (data) {
+      toast(t('build.started', data.overrides), 'ok');
+      global.Sound.play('ok');
+      refreshJobs();
+      refreshProjectOps();
+    }, function (error) {
+      fail(error);
+    }).then(function () { button.disabled = false; });
+  }
+
+  function initBuildPanel() {
+    var base = $('build-base');
+    if (!base) return;
+    if (!base.value) {
+      try { base.value = localStorage.getItem('dpt.build.base') || ''; } catch (e) { }
+    }
+    if (!$('build-label').value) $('build-label').value = 'DPT_MOD';
+    renderBuildSummary();
+  }
+
   // ------------------------------------------------------------------- logs
 
   function refreshLogs() {
@@ -1143,6 +1188,8 @@
     });
 
     $('logs-follow').addEventListener('change', function () { state.logsFollow = this.checked; });
+
+    $('build-run').addEventListener('click', runBuild);
 
     try {
       state.nick = localStorage.getItem('dpt.nick') || '';

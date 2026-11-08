@@ -27,6 +27,9 @@ ModKit.exe img-replace work\GTA3PSPHR.IMG  PLAYER.CHK  work\PLAYER.CHK  --dir lc
 
 :: 5. собрать играбельный образ: дерево игры + папка правок
 ModKit.exe build-image LCS  overrides  MOD.iso   --label DPT_MOD
+
+::    в веб-морде это одна кнопка: проект -> «Операции» -> «Собрать образ из проекта»
+::    (там папка правок = files/ проекта, ничего копировать не надо)
 ::    ...или сразу сжатый:
 ModKit.exe build-image LCS  overrides  MOD.cso   --cso
 ```
