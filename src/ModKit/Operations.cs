@@ -445,15 +445,15 @@ namespace ModKit
         public static Outcome GxtDump(string source, string target)
         {
             Gxt.Table table = Gxt.Read(source);
-            string text = table.ToText();
+            string text = Gxt.ToText(table, true);
             if (string.IsNullOrEmpty(target)) target = Path.ChangeExtension(source, ".txt");
             Util.WriteAllTextAtomic(target, text);
             return new Outcome
             {
                 Ok = true,
-                Message = table.Entries.Count + " strings -> " + Path.GetFileName(target),
-                Data = Json.O("target", target, "strings", (long)table.Entries.Count,
-                    "blocks", table.Blocks.Count)
+                Message = table.Count + " strings -> " + Path.GetFileName(target),
+                Data = Json.O("target", target, "strings", (long)table.Count,
+                    "blocks", (long)table.Blocks.Count)
             };
         }
 
@@ -461,13 +461,71 @@ namespace ModKit
         {
             Gxt.Table table = Gxt.Read(source);
             var items = new List<object>();
-            foreach (Gxt.Entry entry in table.Entries)
+            foreach (Gxt.Entry entry in table.AllEntries())
                 items.Add(Json.O("key", entry.Key, "block", entry.Block, "text", entry.Text));
             return new Outcome
             {
                 Ok = true,
-                Message = table.Entries.Count + " strings",
-                Data = Json.O("strings", items, "blocks", table.Blocks.ToArray())
+                Message = table.Count + " strings",
+                Data = Json.O("strings", items, "blocks", (long)table.Blocks.Count)
+            };
+        }
+
+        /// <summary>
+        /// Builds a GXT from an edited text export. Keys and blocks stay as they are
+        /// in the original file; the importer refuses to invent or drop keys silently,
+        /// it reports the difference instead.
+        /// </summary>
+        public static Outcome GxtImport(string source, string textPath, string target)
+        {
+            if (!File.Exists(source)) return Outcome.Fail("no such GXT: " + source);
+            if (!File.Exists(textPath)) return Outcome.Fail("no such text file: " + textPath);
+
+            Gxt.Table template = Gxt.Read(source);
+            if (!template.Stories)
+                return Outcome.Fail("writing is implemented for the Stories layout (TABLD) only");
+
+            Gxt.Table edited = Gxt.FromText(File.ReadAllText(textPath), template);
+            if (edited.Count == 0)
+                return Outcome.Fail("the text file contains no strings (expected [BLOCK] and KEY<TAB>text)");
+
+            var before = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (Gxt.Entry entry in template.AllEntries())
+                before[entry.Block + "/" + entry.Key] = entry.Text;
+
+            int changed = 0, added = 0, removed = 0;
+            foreach (Gxt.Entry entry in edited.AllEntries())
+            {
+                string key = entry.Block + "/" + entry.Key;
+                string old;
+                if (!before.TryGetValue(key, out old)) added++;
+                else if (!string.Equals(old, entry.Text, StringComparison.Ordinal)) changed++;
+            }
+            var seen = new Dictionary<string, bool>(StringComparer.Ordinal);
+            foreach (Gxt.Entry entry in edited.AllEntries())
+                seen[entry.Block + "/" + entry.Key] = true;
+            foreach (string key in before.Keys)
+                if (!seen.ContainsKey(key)) removed++;
+
+            byte[] built = Gxt.Build(edited);
+
+            // prove the result parses back before writing it anywhere
+            Gxt.Table check = Gxt.Read(built, "verify");
+            if (check.Count != edited.Count)
+                return Outcome.Fail("internal check failed: built " + check.Count + " strings, expected " +
+                                    edited.Count);
+
+            string output = string.IsNullOrEmpty(target) ? source : target;
+            Util.WriteAllBytesAtomic(output, built);
+
+            return new Outcome
+            {
+                Ok = true,
+                Message = "wrote " + check.Count + " strings to " + Path.GetFileName(output) +
+                          " (" + changed + " changed, " + added + " added, " + removed + " removed)",
+                Data = Json.O("output", output, "strings", (long)check.Count,
+                    "changed", (long)changed, "added", (long)added, "removed", (long)removed,
+                    "size", built.Length)
             };
         }
 

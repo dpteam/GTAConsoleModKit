@@ -301,7 +301,39 @@ if (Test-Path $dtz) {
         Check "gxt-dump extracts strings" {
             $txt = Join-Path $temp 'english.txt'
             $out = Run @('gxt-dump', $gxt, $txt)
-            (Test-Path $txt) -and ((Get-Content $txt).Count -gt 1000)
+            $content = [System.IO.File]::ReadAllText($txt, [System.Text.Encoding]::UTF8)
+            (Test-Path $txt) -and ((Get-Content $txt).Count -gt 1000) -and
+                ($content -match '\[MAIN\]') -and ($content -match "ACCURA\tAccuracy") -and
+                ($out -match '5707 strings')
+        }
+
+        Check "gxt no-op import is byte identical" {
+            $txt = Join-Path $temp 'english.txt'
+            $rt = Join-Path $temp 'rt.gxt'
+            $log = Run @('gxt-import', $gxt, $txt, $rt)
+            $a = [System.IO.File]::ReadAllBytes($gxt)
+            $b = [System.IO.File]::ReadAllBytes($rt)
+            $same = $a.Length -eq $b.Length
+            if ($same) {
+                for ($i = 0; $i -lt $a.Length; $i++) { if ($a[$i] -ne $b[$i]) { $same = $false; break } }
+            }
+            ($log -match '0 changed') -and $same
+        }
+
+        Check "gxt import applies an edit and keeps every key" {
+            $edited = Join-Path $temp 'english-edited.txt'
+            $content = [System.IO.File]::ReadAllText((Join-Path $temp 'english.txt'), [System.Text.Encoding]::UTF8)
+            $content = $content.Replace("ACCURA`tAccuracy", "ACCURA`t" + [char]0x0422 + [char]0x043E + [char]0x0447 + [char]0x043D + [char]0x043E + [char]0x0441 + [char]0x0442 + [char]0x044C)
+            [System.IO.File]::WriteAllText($edited, $content, (New-Object System.Text.UTF8Encoding $false))
+
+            $out = Join-Path $temp 'edited.gxt'
+            $log = Run @('gxt-import', $gxt, $edited, $out)
+            $check = Join-Path $temp 'edited-check.txt'
+            Run @('gxt-dump', $out, $check) | Out-Null
+            $back = [System.IO.File]::ReadAllText($check, [System.Text.Encoding]::UTF8)
+
+            ($log -match '1 changed') -and ($log -match '5707 strings') -and
+                ($back -match [string][char]0x0422) -and ($back -match "AEROPL`tAeroplane")
         }
     } else { Skip "gxt test" "no ENGLISH.GXT" }
 } else {

@@ -23,7 +23,7 @@ ModKit.exe identify LOADSC0.CHK
 | `.LVZ` (zlib + чанк `WRLD`) | да | пересжатие |
 | `.CHK` / `.XTX` (текстуры) | да: список, палитра, swizzle, mip, PNG | да: PNG → текстура (pal4/pal8) |
 | `.MDL`, `.ANIM` (чанки `ldm`/`anim`) | заголовок и границы | — |
-| `.GXT` (таблицы текста) | да, дамп в текст | — |
+| `.GXT` (таблицы текста) | да, дамп в редактируемый текст | да (UTF-16, сортировка ключей) |
 | `.VAG` (PS-ADPCM) | да → WAV | да ← WAV |
 | `.AT3`, `.PMF`/`.PSS`, байткод Lua | идентификация и метаданные | — |
 
@@ -76,6 +76,7 @@ ModKit.exe chk-list <file.chk|.xtx>
 ModKit.exe chk-export <file.chk> [folder]
 ModKit.exe chk-replace <chk> <png> [index] [out.chk]
 ModKit.exe gxt-dump <file.gxt> [out.txt]
+ModKit.exe gxt-import <file.gxt> <edited.txt> [out.gxt]
 ModKit.exe vag-to-wav <file.vag> [out.wav]
 ModKit.exe wav-to-vag <file.wav> [out.vag]
 ModKit.exe project-list

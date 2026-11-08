@@ -293,11 +293,15 @@ namespace ModKit.Web
                     {
                         Gxt.Table table = Gxt.Read(target);
                         var strings = new List<object>();
-                        int limit = Math.Min(table.Entries.Count, 300);
-                        for (int i = 0; i < limit; i++)
-                            strings.Add(Json.O("key", table.Entries[i].Key, "text", table.Entries[i].Text));
+                        int shown = 0;
+                        foreach (Gxt.Entry entry in table.AllEntries())
+                        {
+                            if (shown++ >= 300) break;
+                            strings.Add(Json.O("key", entry.Key, "block", entry.Block,
+                                "text", entry.Text));
+                        }
                         payload["strings"] = strings;
-                        payload["stringCount"] = (long)table.Entries.Count;
+                        payload["stringCount"] = (long)table.Count;
                     }
                     catch (Exception ex)
                     {
@@ -577,6 +581,9 @@ namespace ModKit.Web
                         break;
                     case "gxt-dump":
                         outcome = Operations.GxtDump(resolvedSource, resolvedTarget);
+                        break;
+                    case "gxt-import":
+                        outcome = Operations.GxtImport(resolvedSource, extra, resolvedTarget);
                         break;
                     case "vag-to-wav":
                         outcome = Operations.VagToWav(resolvedSource, resolvedTarget);

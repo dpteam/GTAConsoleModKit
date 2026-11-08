@@ -648,7 +648,7 @@
     body.appendChild(el('p', null,
       'Что работает сейчас: CSO/ZSO ↔ ISO, ISO 9660 (разбор и сборка), IMG (GTA III/VC/SA и Stories), ' +
       'GAME.DTZ ↔ GAME.DAT, таблица стриминга и экспорт .DIR, CHK/XTX текстуры (палитра, PSP swizzle, ' +
-      'mip-цепочки, PNG), GXT строки, VAG ↔ WAV.'));
+      'mip-цепочки, PNG), GXT текст (чтение и сборка), VAG ↔ WAV.'));
 
     body.appendChild(el('h3', null, 'CLI'));
     var pre = el('pre', 'logbox small');

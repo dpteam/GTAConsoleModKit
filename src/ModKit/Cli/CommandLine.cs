@@ -68,6 +68,8 @@ namespace ModKit.Cli
                         return ChkReplace(rest);
                     case "gxt-dump":
                         return GxtDump(rest);
+                    case "gxt-import":
+                        return GxtImport(rest);
                     case "vag-to-wav":
                         return VagToWav(rest);
                     case "wav-to-vag":
@@ -118,7 +120,8 @@ DPT.PSP GTA Modding Kit - headless commands
   chk-list <file.chk|.xtx>             list textures
   chk-export <file.chk> [folder]       export every texture as PNG
   chk-replace <chk> <png> [i] [out]    put a PNG back into a texture (mip + palette)
-  gxt-dump <file.gxt> [out.txt]        dump the text table
+  gxt-dump <file.gxt> [out.txt]        dump the text table (editable)
+  gxt-import <file.gxt> <edited.txt> [out.gxt]   rebuild the GXT from the edited text
   vag-to-wav <file.vag> [out.wav]      decode PS-ADPCM
   wav-to-vag <file.wav> [out.vag]      encode PS-ADPCM
   project-list                         projects in the workspace
@@ -441,6 +444,15 @@ Notes
         {
             if (args.Count < 1) return Usage("gxt-dump <file.gxt> [out.txt]");
             Operations.Outcome outcome = Operations.GxtDump(args[0], args.Count > 1 ? args[1] : null);
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int GxtImport(List<string> args)
+        {
+            if (args.Count < 2) return Usage("gxt-import <file.gxt> <edited.txt> [out.gxt]");
+            Operations.Outcome outcome = Operations.GxtImport(args[0], args[1],
+                args.Count > 2 ? args[2] : null);
             PrintOutcome(outcome);
             return outcome.Ok ? 0 : 1;
         }
