@@ -16,6 +16,16 @@ namespace ModKit.Formats
     /// </summary>
     public static class Vag
     {
+        /// <summary>Header size of a Sony VAG / a RAW bank record.</summary>
+        public const int HeaderSize = 48;
+
+        private static void WriteBigEndian(byte[] buffer, int offset, int value)
+        {
+            buffer[offset] = (byte)(value >> 24);
+            buffer[offset + 1] = (byte)(value >> 16);
+            buffer[offset + 2] = (byte)(value >> 8);
+            buffer[offset + 3] = (byte)value;
+        }
         public sealed class Info
         {
             public int Version;
@@ -33,10 +43,15 @@ namespace ModKit.Formats
             if (magic != "VAGp") return info;
             info.IsVag = true;
             info.Version = (int)Util.U32BE(data, 4);
-            info.DataSize = (int)Util.U32BE(data, 8);
-            info.SampleRate = (int)Util.U32BE(data, 12);
+            // Sony layout: magic, version, reserved, dataSize, sampleRate, ... name.
+            // Reading the size at +8 (one field early) made every RAW bank decode as
+            // "2880 Hz" silence - the size belongs at +12, the rate at +16.
+            info.DataSize = (int)Util.U32BE(data, 12);
+            info.SampleRate = (int)Util.U32BE(data, 16);
             int nameLength = Math.Min(16, Math.Max(0, data.Length - 32));
             if (nameLength > 0) info.Name = Util.CString(data, 32, nameLength);
+            if (info.DataSize <= 0 || info.DataSize > data.Length - 48)
+                info.DataSize = Math.Max(0, data.Length - 48);
             if (info.SampleRate <= 0 || info.SampleRate > 192000) info.SampleRate = 22050;
             return info;
         }
@@ -51,8 +66,12 @@ namespace ModKit.Formats
             var samples = new short[dataLength / 16 * 28];
             int sampleIndex = 0;
 
-            short[] hist1 = new short[5];
-            short[] hist2 = new short[5];
+            // The predictor history is the last two decoded samples, full stop.
+            // Keeping one pair per filter index (as an earlier version did) drifts
+            // as soon as two consecutive frames use different filters: the
+            // prediction then leans on stale samples from another frame.
+            int h1 = 0;
+            int h2 = 0;
             int[][] coefs =
             {
                 new[] { 0, 0 },
@@ -70,9 +89,6 @@ namespace ModKit.Formats
                 int filter = (header >> 4) & 0x0f;
                 if (filter > 4) filter = 0;
 
-                int h1 = hist1[filter];
-                int h2 = hist2[filter];
-
                 for (int i = 0; i < 14; i++)
                 {
                     int b = data[offset + 2 + i];
@@ -89,9 +105,6 @@ namespace ModKit.Formats
                         if (sampleIndex < samples.Length) samples[sampleIndex++] = (short)sample;
                     }
                 }
-
-                hist1[filter] = (short)h1;
-                hist2[filter] = (short)h2;
             }
 
             if (sampleIndex == samples.Length) return samples;
@@ -201,18 +214,27 @@ namespace ModKit.Formats
             int dataSize = frames * 16;
             using (var output = new MemoryStream(48 + dataSize))
             {
-                var writer = new BinaryWriter(output);
-                writer.Write(Encoding.ASCII.GetBytes("VAGp"));
-                writer.Write(0x00000020);
-                writer.Write(dataSize);
-                writer.Write(sampleRate);
-                var nameBytes = new byte[16];
+                // 48-byte Sony header, all integers big-endian: magic, version,
+                // reserved, dataSize, sampleRate, three reserved words, name[16].
+                // BinaryWriter writes little-endian, which produced files that the
+                // game (and our own reader) could not decode.
+                var header = new byte[HeaderSize];
+                header[0] = (byte)'V';
+                header[1] = (byte)'A';
+                header[2] = (byte)'G';
+                header[3] = (byte)'p';
+                WriteBigEndian(header, 4, 0x00000020);
+                WriteBigEndian(header, 8, 0);
+                WriteBigEndian(header, 12, dataSize);
+                WriteBigEndian(header, 16, sampleRate);
                 if (!string.IsNullOrEmpty(name))
                 {
                     byte[] raw = Encoding.ASCII.GetBytes(name);
-                    Buffer.BlockCopy(raw, 0, nameBytes, 0, Math.Min(16, raw.Length));
+                    Buffer.BlockCopy(raw, 0, header, HeaderSize - 16, Math.Min(16, raw.Length));
                 }
-                writer.Write(nameBytes);
+
+                var writer = new BinaryWriter(output);
+                writer.Write(header);
 
                 for (int frame = 0; frame < frames; frame++)
                 {
@@ -230,10 +252,15 @@ namespace ModKit.Formats
                         if (abs > maxValue) maxValue = abs;
                     }
 
+                    // Pick the FINEST step that still fits 3 bits of magnitude: the decoder
+                    // computes (nibble << 12) >> shift, so one step is 4096 >> shift and
+                    // seven steps must cover the peak. The old loop started at shift 0
+                    // and stopped immediately (4096 >> 0 already "covers" 3000), which
+                    // quantised a 3000-amplitude signal down to zeros and -1s.
                     int shift = 0;
                     if (maxValue > 0)
                     {
-                        while (shift < 12 && (maxValue >> (12 - shift)) > 7) shift++;
+                        while (shift < 12 && 7L * (4096 >> (shift + 1)) >= maxValue) shift++;
                     }
 
                     var payload = new byte[16];

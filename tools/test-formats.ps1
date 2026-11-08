@@ -436,6 +436,109 @@ if (Test-Path $dtz) {
         }
     } else { Skip "chk tests" "no LOADSC0.CHK" }
 
+    # ------------------------------------------------------- audio: VAG + RAW
+    function New-TestWav([string]$path, [int16[]]$samples, [int]$rate) {
+        $stream = New-Object System.IO.MemoryStream
+        $writer = New-Object System.IO.BinaryWriter($stream)
+        $dataBytes = $samples.Length * 2
+        $writer.Write([System.Text.Encoding]::ASCII.GetBytes('RIFF'))
+        $writer.Write(36 + $dataBytes)
+        $writer.Write([System.Text.Encoding]::ASCII.GetBytes('WAVEfmt '))
+        $writer.Write(16); $writer.Write([int16]1); $writer.Write([int16]1)
+        $writer.Write($rate); $writer.Write($rate * 2)
+        $writer.Write([int16]2); $writer.Write([int16]16)
+        $writer.Write([System.Text.Encoding]::ASCII.GetBytes('data'))
+        $writer.Write($dataBytes)
+        foreach ($sample in $samples) { $writer.Write($sample) }
+        $writer.Flush()
+        [System.IO.File]::WriteAllBytes($path, $stream.ToArray())
+        $stream.Dispose()
+    }
+
+    function Read-WavSamples([string]$path) {
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        $rate = [BitConverter]::ToInt32($bytes, 24)
+        $count = [BitConverter]::ToInt32($bytes, 40) / 2
+        $samples = New-Object 'System.Int16[]' $count
+        for ($i = 0; $i -lt $count; $i++) {
+            $samples[$i] = [BitConverter]::ToInt16($bytes, 44 + $i * 2)
+        }
+        return @{ Rate = $rate; Samples = $samples }
+    }
+
+    $tone = New-Object 'System.Int16[]' 840
+    for ($i = 0; $i -lt 840; $i++) {
+        $tone[$i] = [int16](3000 * [Math]::Sin($i / 12.0))
+    }
+
+    Check "wav-to-vag writes the Sony 48-byte header" {
+        $wav = Join-Path $temp 'tone.wav'
+        $vag = Join-Path $temp 'tone.vag'
+        New-TestWav $wav $tone 22050
+        Run @('wav-to-vag', $wav, $vag) | Out-Null
+        if (-not (Test-Path $vag)) { return $false }
+
+        $b = [System.IO.File]::ReadAllBytes($vag)
+        $size = (([int]$b[12]) -shl 24) -bor (([int]$b[13]) -shl 16) -bor (([int]$b[14]) -shl 8) -bor ([int]$b[15])
+        $rate = (([int]$b[16]) -shl 24) -bor (([int]$b[17]) -shl 16) -bor (([int]$b[18]) -shl 8) -bor ([int]$b[19])
+        # dataSize at 0x0C, sampleRate at 0x10 - reading them 4 bytes early is what
+        # made every bank decode as "2880 Hz" silence
+        ([System.Text.Encoding]::ASCII.GetString($b, 0, 4) -eq 'VAGp') -and
+            ($size -eq ($b.Length - 48)) -and ($rate -eq 22050)
+    }
+
+    Check "vag roundtrip keeps the signal" {
+        $vag = Join-Path $temp 'tone.vag'
+        $back = Join-Path $temp 'tone-back.wav'
+        Run @('vag-to-wav', $vag, $back) | Out-Null
+        $decoded = Read-WavSamples $back
+        if ($decoded.Rate -ne 22050) { return $false }
+        # PS-ADPCM is lossy: compare by correlation, not by equality
+        $n = $tone.Length
+        if ($decoded.Samples.Length -lt $n) { return $false }
+        $sumAB = 0.0; $sumAA = 0.0; $sumBB = 0.0
+        for ($i = 0; $i -lt $n; $i++) {
+            $a = [double]$tone[$i]; $b = [double]$decoded.Samples[$i]
+            $sumAB += $a * $b; $sumAA += $a * $a; $sumBB += $b * $b
+        }
+        $correlation = $sumAB / [Math]::Sqrt($sumAA * $sumBB)
+        $correlation -gt 0.98
+    }
+
+    Check "raw-list and raw-wav read a bank of two samples" {
+        $bank = Join-Path $temp 'bank.raw'
+        $first = [System.IO.File]::ReadAllBytes((Join-Path $temp 'tone.vag'))
+        $second = (Read-WavSamples (Join-Path $temp 'tone-back.wav')).Samples
+        New-TestWav (Join-Path $temp 'tone2.wav') $second 11025
+        $vag2 = Join-Path $temp 'tone2.vag'
+        Run @('wav-to-vag', (Join-Path $temp 'tone2.wav'), $vag2) | Out-Null
+        $secondBytes = [System.IO.File]::ReadAllBytes($vag2)
+
+        $all = New-Object byte[] ($first.Length + $secondBytes.Length)
+        [Array]::Copy($first, 0, $all, 0, $first.Length)
+        [Array]::Copy($secondBytes, 0, $all, $first.Length, $secondBytes.Length)
+        [System.IO.File]::WriteAllBytes($bank, $all)
+
+        $listing = Run @('raw-list', $bank)
+        $folder = Join-Path $temp 'bank-wav'
+        $log = Run @('raw-wav', $bank, $folder)
+        $files = @(Get-ChildItem $folder -Filter *.wav -ErrorAction SilentlyContinue)
+
+        $ok = ($listing -match '2 sample\(s\)') -and ($listing -match '22050 Hz') -and
+              ($listing -match '11025 Hz') -and ($log -match 'decoded 2 of 2') -and
+              ($files.Count -eq 2)
+        if (-not $ok) { return $false }
+
+        # a bank entry must decode exactly like the standalone VAG it came from
+        $solo = Join-Path $temp 'solo.wav'
+        Run @('vag-to-wav', (Join-Path $temp 'tone.vag'), $solo) | Out-Null
+        $a = [System.IO.File]::ReadAllBytes($solo)
+        $banked = $files | Where-Object { $_.Name -like '0000_*' } | Select-Object -First 1
+        if (-not $banked) { return $false }
+        $b = [System.IO.File]::ReadAllBytes($banked.FullName)
+        ($a.Length -eq $b.Length) -and (-not (Compare-Object $a $b))
+    }
+
     if (Test-Path $gxt) {
         Check "gxt-dump extracts strings" {
             $txt = Join-Path $temp 'english.txt'

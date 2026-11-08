@@ -914,6 +914,13 @@ namespace ModKit.Web
                     case "vag-to-wav":
                         outcome = Operations.VagToWav(resolvedSource, resolvedTarget);
                         break;
+                    case "raw-list":
+                        outcome = Operations.RawList(resolvedSource);
+                        break;
+                    case "raw-wav":
+                        outcome = Operations.RawToWav(resolvedSource, resolvedTarget,
+                            delegate(string path, int count) { j.Note(path); });
+                        break;
                     case "wav-to-vag":
                         outcome = Operations.WavToVag(resolvedSource, resolvedTarget);
                         break;

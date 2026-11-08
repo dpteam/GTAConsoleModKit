@@ -799,6 +799,102 @@ namespace ModKit
             };
         }
 
+        // --------------------------------------------------------------- RAW banks
+
+        /// <summary>
+        /// Lists the samples inside a Rockstar .RAW bank (LCS/VCS `AUDIO\SET*`).
+        /// The bank has no index: records are chained by their declared size, so
+        /// "chains exactly to the end of the file" is the structural check.
+        /// </summary>
+        public static Outcome RawList(string source)
+        {
+            if (!File.Exists(source)) return Outcome.Fail("no such file: " + source);
+            byte[] data = File.ReadAllBytes(source);
+            RawBank.Result bank = RawBank.Read(data);
+
+            var entries = new List<object>();
+            foreach (RawBank.Entry entry in bank.Entries)
+            {
+                entries.Add(Json.O(
+                    "index", (long)entry.Index,
+                    "offset", (long)entry.Offset,
+                    "size", (long)entry.Size,
+                    "rate", (long)entry.SampleRate,
+                    "version", (long)entry.Version,
+                    "name", entry.Name,
+                    "samples", (long)entry.Samples,
+                    "seconds", Math.Round(entry.Seconds, 3),
+                    "magic", entry.MagicOk));
+            }
+
+            return new Outcome
+            {
+                Ok = bank.Entries.Count > 0,
+                Message = bank.Entries.Count + " sample(s) in " + Path.GetFileName(source) +
+                          (bank.ChainsExactly ? ", chain ok" : ", chain broken: " + bank.Problem),
+                Data = Json.O("file", source, "entries", entries,
+                    "chained", bank.ChainsExactly, "consumed", (long)bank.Consumed,
+                    "size", (long)data.Length)
+            };
+        }
+
+        /// <summary>Decodes every sample of a bank into its own WAV.</summary>
+        public static Outcome RawToWav(string source, string target, Action<string, int> progress)
+        {
+            if (!File.Exists(source)) return Outcome.Fail("no such file: " + source);
+            byte[] data = File.ReadAllBytes(source);
+            RawBank.Result bank = RawBank.Read(data);
+            if (bank.Entries.Count == 0)
+                return Outcome.Fail("no VAG records found: " + (bank.Problem ?? "empty file"));
+
+            if (string.IsNullOrEmpty(target))
+                target = Path.ChangeExtension(source, null) + "_wav";
+            Directory.CreateDirectory(target);
+
+            int written = 0;
+            long bytes = 0;
+            var used = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (RawBank.Entry entry in bank.Entries)
+            {
+                string name = Util.Slug(string.IsNullOrEmpty(entry.Name) ? "sample" : entry.Name);
+                int seen;
+                if (used.TryGetValue(name, out seen))
+                {
+                    seen++;
+                    used[name] = seen;
+                    name = name + "_" + seen;
+                }
+                else
+                {
+                    used[name] = 0;
+                }
+
+                string file = Path.Combine(target, entry.Index.ToString("0000") + "_" + name + ".wav");
+                try
+                {
+                    byte[] wav = RawBank.ToWav(data, entry);
+                    File.WriteAllBytes(file, wav);
+                    written++;
+                    bytes += wav.Length;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(Cat.Fmt, "cannot decode " + entry.Name + ": " + Log.Describe(ex));
+                }
+                if (progress != null) progress(Path.GetFileName(file), written);
+            }
+
+            return new Outcome
+            {
+                Ok = written > 0,
+                Message = "decoded " + written + " of " + bank.Entries.Count + " sample(s) to " + target +
+                          (bank.ChainsExactly ? "" : " (chain broken: " + bank.Problem + ")"),
+                Data = Json.O("target", target, "samples", (long)written,
+                    "entries", (long)bank.Entries.Count, "bytes", bytes,
+                    "chained", bank.ChainsExactly)
+            };
+        }
+
         // ---------------------------------------------------------------- GXT
 
         public static Outcome GxtDump(string source, string target)

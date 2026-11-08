@@ -80,6 +80,10 @@ namespace ModKit.Cli
                         return GxtImport(rest);
                     case "vag-to-wav":
                         return VagToWav(rest);
+                    case "raw-list":
+                        return RawList(rest);
+                    case "raw-wav":
+                        return RawWav(rest);
                     case "wav-to-vag":
                         return WavToVag(rest);
                     case "project-list":
@@ -137,6 +141,8 @@ DPT.PSP GTA Modding Kit - headless commands
   gxt-dump <file.gxt> [out.txt]        dump the text table (editable)
   gxt-import <file.gxt> <edited.txt> [out.gxt]   rebuild the GXT from the edited text
   vag-to-wav <file.vag> [out.wav]      decode PS-ADPCM
+  raw-list <file.raw>                  samples inside a Rockstar SFX bank
+  raw-wav <file.raw> [folder]          decode every sample of the bank to WAV
   wav-to-vag <file.wav> [out.vag]      encode PS-ADPCM
   project-list                         projects in the workspace
   project-new <name> [game]            create a project
@@ -577,6 +583,41 @@ Notes
             if (args.Count < 1) return Usage("vag-to-wav <file.vag> [out.wav]");
             PrintOutcome(Operations.VagToWav(args[0], args.Count > 1 ? args[1] : null));
             return 0;
+        }
+
+        private static int RawList(List<string> args)
+        {
+            if (args.Count < 1) return Usage("raw-list <file.raw>");
+            Operations.Outcome outcome = Operations.RawList(args[0]);
+            var entries = outcome.Data["entries"] as List<object>;
+            if (entries != null)
+                foreach (object item in entries)
+                {
+                    var entry = item as Dictionary<string, object>;
+                    if (entry == null) continue;
+                    object secondsValue;
+                    entry.TryGetValue("seconds", out secondsValue);
+                    double seconds = secondsValue is double ? (double)secondsValue : 0;
+                    Console.WriteLine(string.Format(
+                        "  {0,4}  {1,-18} {2,6} Hz  {3,7} samples  {4,7:0.00} s  {5} B",
+                        Json.GetLong(entry, "index", 0),
+                        Json.GetString(entry, "name", ""),
+                        Json.GetLong(entry, "rate", 0),
+                        Json.GetLong(entry, "samples", 0),
+                        seconds,
+                        Json.GetLong(entry, "size", 0)));
+                }
+            Console.WriteLine(outcome.Message);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int RawWav(List<string> args)
+        {
+            if (args.Count < 1) return Usage("raw-wav <file.raw> [folder]");
+            Operations.Outcome outcome = Operations.RawToWav(args[0], args.Count > 1 ? args[1] : null,
+                ProgressText());
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
         }
 
         private static int WavToVag(List<string> args)

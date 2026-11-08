@@ -26,6 +26,7 @@ ModKit.exe identify LOADSC0.CHK
 | `.MDL`, `.ANIM` (чанки `ldm`/`anim`) | заголовок и границы | — |
 | `.GXT` (таблицы текста) | да, дамп в редактируемый текст | да (UTF-16, сортировка ключей) |
 | `.VAG` (PS-ADPCM) | да → WAV | да ← WAV |
+| `*.RAW` (банки SFX LCS/VCS) | да: список и раскладка в WAV | — |
 | `.AT3`, `.PMF`/`.PSS`, байткод Lua | идентификация и метаданные | — |
 
 Проверено на реальных образах LCS и VCS (см. `docs/FORMATS.md`, там же честный список пробелов).
@@ -64,6 +65,8 @@ ModKit.exe iso-list <image.iso>
 ModKit.exe iso-extract <image.iso> [folder]
 ModKit.exe iso-build <folder> [out.iso] [label]
 ModKit.exe build-image <tree> <overrides> <out.iso|.cso> [--cso] [--label X]
+ModKit.exe raw-list <file.raw>
+ModKit.exe raw-wav  <file.raw> <folder>
 ModKit.exe tex-index <image.img> [--dir x.dir]
 ModKit.exe tex-export-all <image.img> <folder> [--dir x.dir]
 ModKit.exe tex-import-all <image.img> <folder> [--dir x.dir] [--all]
