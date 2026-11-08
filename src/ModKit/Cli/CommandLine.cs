@@ -40,6 +40,8 @@ namespace ModKit.Cli
                         return IsoExtract(rest);
                     case "iso-build":
                         return IsoBuild(rest);
+                    case "build-image":
+                        return BuildImage(rest);
                     case "img-list":
                         return ImgList(rest);
                     case "img-extract":
@@ -189,6 +191,18 @@ Notes
             string target = args.Count > 1 ? args[1] : null;
             string label = args.Count > 2 ? args[2] : "GTA_PSP";
             Operations.Outcome outcome = Operations.IsoBuild(args[0], target, label, Progress());
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int BuildImage(List<string> args)
+        {
+            string label = TakeOption(args, "--label");
+            bool compress = args.Remove("--cso");
+            if (args.Count < 2) return Usage("build-image <game-tree> <overrides-folder> <out.iso|out.cso> [--label X] [--cso]");
+            string target = args.Count > 2 ? args[2] : null;
+            Operations.Outcome outcome = Operations.BuildImage(args[0], args[1], target,
+                label, compress, Progress());
             PrintOutcome(outcome);
             return outcome.Ok ? 0 : 1;
         }

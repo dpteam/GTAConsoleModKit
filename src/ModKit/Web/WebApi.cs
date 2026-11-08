@@ -573,6 +573,11 @@ namespace ModKit.Web
                     case "iso-build":
                         outcome = Operations.IsoBuild(resolvedSource, resolvedTarget, extra, progress);
                         break;
+                    case "build-image":
+                        outcome = Operations.BuildImage(resolvedSource, extra, resolvedTarget,
+                            Json.GetString(body, "label", ""),
+                            Json.GetBool(body, "compress", false), progress);
+                        break;
                     case "img-list":
                         outcome = Operations.ImgList(resolvedSource, extra);
                         break;

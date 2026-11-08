@@ -221,10 +221,22 @@ namespace ModKit.Formats
         /// </summary>
         public static void Build(string sourceDirectory, string isoPath, string volumeLabel, Action<int> progress)
         {
+            Build(sourceDirectory, isoPath, volumeLabel, null, progress);
+        }
+
+        /// <summary>
+        /// Builds an image from a folder, substituting files from an "overlay" map
+        /// (relative path -> real file). That is how a mod project is packed: the
+        /// base game tree stays untouched and only the changed files come from the
+        /// project, without copying a 1 GB tree around.
+        /// </summary>
+        public static void Build(string sourceDirectory, string isoPath, string volumeLabel,
+            IDictionary<string, string> overlay, Action<int> progress)
+        {
             if (!Directory.Exists(sourceDirectory))
                 throw new DirectoryNotFoundException(sourceDirectory);
 
-            Node root = Scan(sourceDirectory, "");
+            Node root = Scan(sourceDirectory, "", overlay);
             var directories = new List<Node>();
             CollectDirectories(root, directories);
 
@@ -340,32 +352,49 @@ namespace ModKit.Formats
             }
         }
 
-        private static Node Scan(string path, string relative)
+        private static Node Scan(string path, string relativeDir, IDictionary<string, string> overlay)
         {
             var node = new Node
             {
-                Name = string.IsNullOrEmpty(relative) ? "" : Path.GetFileName(path),
+                Name = string.IsNullOrEmpty(relativeDir) ? "" : Path.GetFileName(path),
                 SourcePath = path,
                 IsDirectory = true
             };
+
             foreach (string child in Directory.GetFiles(path))
             {
                 var info = new FileInfo(child);
+                string relative = string.IsNullOrEmpty(relativeDir) ? info.Name : relativeDir + "/" + info.Name;
+                string sourcePath = child;
+                long length = info.Length;
+
+                // an overlay file wins over the base tree, including a different size
+                string replacement;
+                if (overlay != null && overlay.TryGetValue(relative.Replace('\\', '/'), out replacement))
+                {
+                    sourcePath = replacement;
+                    length = new FileInfo(replacement).Length;
+                }
+
                 node.Children.Add(new Node
                 {
                     Name = info.Name,
-                    SourcePath = child,
+                    SourcePath = sourcePath,
                     IsDirectory = false,
-                    Length = info.Length,
+                    Length = length,
                     Parent = node
                 });
             }
+
             foreach (string child in Directory.GetDirectories(path))
             {
-                Node sub = Scan(child, child);
+                string name = Path.GetFileName(child);
+                string relative = string.IsNullOrEmpty(relativeDir) ? name : relativeDir + "/" + name;
+                Node sub = Scan(child, relative, overlay);
                 sub.Parent = node;
                 node.Children.Add(sub);
             }
+
             // ISO order: directories first, then files, alphabetical inside each group.
             node.Children.Sort(delegate(Node a, Node b)
             {

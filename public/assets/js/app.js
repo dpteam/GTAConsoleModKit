@@ -28,6 +28,7 @@
     { name: 'iso-to-cso', title: 'ISO → CSO', desc: 'Сжать образ обратно в CSO (deflate, 2048).', source: 'ISO файл', target: 'CSO (необязательно)' },
     { name: 'iso-extract', title: 'Распаковать ISO', desc: 'Вытащить дерево файлов из образа.', source: 'ISO файл', target: 'Папка' },
     { name: 'iso-build', title: 'Собрать ISO', desc: 'Собрать образ из папки (ISO 9660 level 2).', source: 'Папка', target: 'ISO файл', extra: 'Метка тома' },
+    { name: 'build-image', title: 'Собрать образ', desc: 'Упаковать дерево игры с правками проекта в ISO/CSO.', source: 'Дерево игры (PSP_GAME)', target: 'ISO или CSO', extra: 'Папка правок' },
     { name: 'img-list', title: 'IMG: список', desc: 'Показать записи IMG (использует .DIR, если он есть).', source: 'IMG файл', extra: 'DIR файл (необязательно)' },
     { name: 'img-extract', title: 'IMG: распаковать', desc: 'Достать записи IMG в папку.', source: 'IMG файл', target: 'Папка', extra: 'DIR файл' },
     { name: 'dtz-inspect', title: 'DTZ: инспект', desc: 'Таблица стриминга GAME.DAT.', source: 'GAME.DTZ' },

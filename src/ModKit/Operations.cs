@@ -105,6 +105,83 @@ namespace ModKit
             };
         }
 
+        /// <summary>
+        /// Packs a game tree into a playable image, substituting the files from an
+        /// overrides folder (normally the project's <c>files/</c>). The base tree is
+        /// never copied, so a 1 GB game does not have to be duplicated to apply a
+        /// handful of edits.
+        /// </summary>
+        public static Outcome BuildImage(string baseTree, string overrides, string target,
+            string label, bool compress, Action<int> progress)
+        {
+            if (!Directory.Exists(baseTree)) return Outcome.Fail("no such tree: " + baseTree);
+            if (!Directory.Exists(Path.Combine(baseTree, "PSP_GAME")))
+                return Outcome.Fail("the folder does not look like a PSP game tree (no PSP_GAME inside): " + baseTree);
+
+            var overlay = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(overrides) && Directory.Exists(overrides))
+            {
+                foreach (string file in Directory.GetFiles(overrides, "*", SearchOption.AllDirectories))
+                {
+                    string relative = Util.ToRelative(overrides, file).Replace('\\', '/');
+                    overlay[relative] = file;
+                }
+            }
+
+            string isoPath = target;
+            if (string.IsNullOrEmpty(isoPath))
+                isoPath = Path.Combine(Path.GetTempPath(), "modkit-build-" + Guid.NewGuid().ToString("N") + ".iso");
+            bool wantCso = compress ||
+                           string.Equals(Path.GetExtension(isoPath), ".cso", StringComparison.OrdinalIgnoreCase);
+            string csoPath = wantCso ? isoPath : null;
+
+            string workIso = wantCso
+                ? Path.Combine(Path.GetTempPath(), "modkit-build-" + Guid.NewGuid().ToString("N") + ".iso")
+                : isoPath;
+
+            try
+            {
+                Action<int> isoProgress = delegate(int percent)
+                {
+                    if (progress != null) progress(wantCso ? percent * 85 / 100 : percent);
+                };
+                Iso9660.Build(baseTree, workIso, string.IsNullOrEmpty(label) ? "GTA_PSP" : label,
+                    overlay, isoProgress);
+
+                long isoSize = new FileInfo(workIso).Length;
+                long csoSize = 0;
+                if (wantCso)
+                {
+                    Action<int> csoProgress = delegate(int percent)
+                    {
+                        if (progress != null) progress(85 + percent * 15 / 100);
+                    };
+                    Cso.CompressFromIso(workIso, csoPath, 2048, csoProgress);
+                    csoSize = new FileInfo(csoPath).Length;
+                }
+
+                return new Outcome
+                {
+                    Ok = true,
+                    Message = "built " + Path.GetFileName(csoPath ?? workIso) +
+                              " with " + overlay.Count + " overridden file(s)",
+                    Data = Json.O(
+                        "image", csoPath ?? workIso,
+                        "isoSize", isoSize,
+                        "csoSize", csoSize,
+                        "overrides", (long)overlay.Count,
+                        "base", baseTree)
+                };
+            }
+            finally
+            {
+                if (wantCso)
+                {
+                    try { if (File.Exists(workIso)) File.Delete(workIso); } catch (Exception) { }
+                }
+            }
+        }
+
         // ---------------------------------------------------------------- IMG
 
         public static Outcome ImgList(string source, string directory)

@@ -15,7 +15,7 @@ ModKit.exe identify LOADSC0.CHK
 | Данные | Чтение | Запись |
 |---|---|---|
 | `.CSO` / `.ZSO` (сжатый образ PSP) | да | CSO v1 (deflate) |
-| `.ISO` (ISO 9660 level 2) | да | да, сборка с нуля |
+| `.ISO` (ISO 9660 level 2) | да | да: сборка с нуля и поверх дерева игры с правками |
 | `.IMG` (Stories, `.DIR` + сектора) | да | да (замена на месте, перенос выросших + правка стриминга) |
 | `.IMG` (GTA III/VC `.DIR`, SA `VER2`) | да | да |
 | `GAME.DTZ` ↔ `GAME.DAT` | да | да (zlib) |
@@ -62,6 +62,7 @@ ModKit.exe cso --compress <src.iso> [out.cso]
 ModKit.exe iso-list <image.iso>
 ModKit.exe iso-extract <image.iso> [folder]
 ModKit.exe iso-build <folder> [out.iso] [label]
+ModKit.exe build-image <tree> <overrides> <out.iso|.cso> [--cso] [--label X]
 ModKit.exe img-list <image.img> [dir]
 ModKit.exe img-extract <img> [folder] [--dir <dir>]
 ModKit.exe img-replace <img> <entry> <file> [--dir <dir>]

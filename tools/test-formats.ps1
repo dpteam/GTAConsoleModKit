@@ -128,6 +128,57 @@ Check "img roundtrip via .DIR keeps bytes" {
     $list -match 'THING.MDL' -and $list -match '1 entries'
 }
 
+Check "build-image applies overrides without copying the tree" {
+    $base = Join-Path $temp 'mod-base'
+    $ovr = Join-Path $temp 'mod-ovr'
+    New-Item -ItemType Directory -Path (Join-Path $base 'PSP_GAME\USRDIR\TXD') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $ovr 'PSP_GAME\USRDIR\TXD') -Force | Out-Null
+
+    $original = New-Object byte[] 3000
+    $random.NextBytes($original)
+    [System.IO.File]::WriteAllBytes((Join-Path $base 'PSP_GAME\USRDIR\TXD\KEEP.CHK'), $original)
+    [System.IO.File]::WriteAllBytes((Join-Path $base 'PSP_GAME\USRDIR\TXD\OLD.CHK'), $original)
+    Set-Content -Path (Join-Path $base 'PSP_GAME\PARAM.SFO') -Value 'PARAM' -NoNewline
+
+    $patched = New-Object byte[] 4200      # different size on purpose
+    $random.NextBytes($patched)
+    [System.IO.File]::WriteAllBytes((Join-Path $ovr 'PSP_GAME\USRDIR\TXD\OLD.CHK'), $patched)
+
+    $image = Join-Path $temp 'mod.iso'
+    $log = Run @('build-image', $base, $ovr, $image, '--label', 'MODTEST')
+    if (-not (Test-Path $image)) { return $false }
+
+    $out = Join-Path $temp 'mod-out'
+    Run @('iso-extract', $image, $out) | Out-Null
+
+    $keep = [System.IO.File]::ReadAllBytes((Join-Path $out 'PSP_GAME\USRDIR\TXD\KEEP.CHK'))
+    $old = [System.IO.File]::ReadAllBytes((Join-Path $out 'PSP_GAME\USRDIR\TXD\OLD.CHK'))
+    $keepSame = ($keep.Length -eq $original.Length)
+    if ($keepSame) {
+        for ($i = 0; $i -lt $original.Length; $i++) { if ($keep[$i] -ne $original[$i]) { $keepSame = $false; break } }
+    }
+    $overrideApplied = ($old.Length -eq $patched.Length)
+    if ($overrideApplied) {
+        for ($i = 0; $i -lt $patched.Length; $i++) { if ($old[$i] -ne $patched[$i]) { $overrideApplied = $false; break } }
+    }
+    ($log -match '1 overridden file') -and $keepSame -and $overrideApplied
+}
+
+Check "build-image can write a CSO directly" {
+    $base = Join-Path $temp 'mod-base'
+    $ovr = Join-Path $temp 'mod-ovr'
+    $cso = Join-Path $temp 'mod.cso'
+    $log = Run @('build-image', $base, $ovr, $cso, '--cso')
+    if (-not (Test-Path $cso)) { return $false }
+    $back = Join-Path $temp 'mod-back.iso'
+    Run @('cso', $cso, $back) | Out-Null
+    $out = Join-Path $temp 'mod-out2'
+    Run @('iso-extract', $back, $out) | Out-Null
+    $patched = [System.IO.File]::ReadAllBytes((Join-Path $ovr 'PSP_GAME\USRDIR\TXD\OLD.CHK'))
+    $inside = [System.IO.File]::ReadAllBytes((Join-Path $out 'PSP_GAME\USRDIR\TXD\OLD.CHK'))
+    ($log -match 'built mod.cso') -and ($inside.Length -eq $patched.Length)
+}
+
 Check "gxt of a generated table is rejected cleanly" {
     $fake = Join-Path $temp 'fake.gxt'
     [System.IO.File]::WriteAllBytes($fake, [System.Text.Encoding]::ASCII.GetBytes('NOTGXT'))
