@@ -67,6 +67,26 @@
       return '/api/projects/' + encode(id) + '/file?path=' + encode(path);
     },
 
+    gxtTextUrl: function (id, path) {
+      return '/api/projects/' + encode(id) + '/gxt-text?path=' + encode(path);
+    },
+    gxtImport: function (id, path, file) {
+      return new Promise(function (resolve, reject) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/projects/' + encode(id) + '/gxt-import?path=' + encode(path), true);
+        xhr.setRequestHeader('Content-Type', 'text/plain; charset=utf-8');
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4) return;
+          var payload = null;
+          if (xhr.responseText) { try { payload = JSON.parse(xhr.responseText); } catch (e) { } }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(payload);
+          else reject(new Error((payload && payload.error) || ('HTTP ' + xhr.status)));
+        };
+        xhr.onerror = function () { reject(new Error('network error')); };
+        xhr.send(file);
+      });
+    },
+
     textureImport: function (id, path, index, file) {
       return new Promise(function (resolve, reject) {
         var xhr = new XMLHttpRequest();

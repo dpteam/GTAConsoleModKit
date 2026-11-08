@@ -304,6 +304,19 @@
       box.appendChild(grid);
     }
 
+    if (data.kind === 'gxt') {
+      var gxtBar = el('div', 'insp-head');
+      var download = el('button', 'btn tiny', t('gxt.download'));
+      download.addEventListener('click', function () {
+        window.open(API.gxtTextUrl(state.projectId, state.selectedFile), '_blank');
+      });
+      var upload = el('button', 'btn tiny', t('gxt.upload'));
+      upload.addEventListener('click', function () { pickGxtText(); });
+      gxtBar.appendChild(download);
+      gxtBar.appendChild(upload);
+      box.appendChild(gxtBar);
+    }
+
     if (data.strings && data.strings.length) {
       box.appendChild(el('h3', null, t('inspector.strings') + ' (' + (data.stringCount || data.strings.length) + ')'));
       var table = el('table', 'grid');
@@ -351,6 +364,29 @@
       audio.src = API.audioUrl(state.projectId, state.selectedFile);
       box.appendChild(audio);
     }
+  }
+
+  function pickGxtText() {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt,text/plain';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      document.body.removeChild(input);
+      if (!file) return;
+      API.gxtImport(state.projectId, state.selectedFile, file)
+        .then(function (data) {
+          var changed = data.data ? data.data.changed : 0;
+          toast(t('toast.gxtImported', changed), 'ok');
+          global.Sound.play('ok');
+          inspectFile(state.selectedFile);
+          refreshProjectOps();
+        })
+        .catch(fail);
+    });
+    input.click();
   }
 
   function pickTexture(anchor, texture) {

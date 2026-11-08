@@ -344,6 +344,46 @@ namespace ModKit.Web
                 }
             }
 
+            if (tail == "gxt-text")
+            {
+                string relative = ParseString(request, "path", "");
+                string gxtPath = Util.SafeCombine(project.FilesPath, relative);
+                if (gxtPath == null) return HttpResponse.Error(403, "path traversal denied");
+                if (!File.Exists(gxtPath)) return HttpResponse.Error(404, "no such file");
+                Gxt.Table table = Gxt.Read(gxtPath);
+                var response = HttpResponse.Text(Gxt.ToText(table, true), "text/plain; charset=utf-8", 200);
+                response.Headers["Content-Disposition"] = "attachment; filename=\"gxt.txt\"";
+                return response;
+            }
+
+            if (tail == "gxt-import" && request.Method == "POST")
+            {
+                string relative = ParseString(request, "path", "");
+                string gxtPath = Util.SafeCombine(project.FilesPath, relative);
+                if (gxtPath == null) return HttpResponse.Error(403, "path traversal denied");
+                if (!File.Exists(gxtPath)) return HttpResponse.Error(404, "no such file");
+                if (request.Body == null || request.Body.Length == 0)
+                    return HttpResponse.Error(400, "empty text body");
+
+                string temp = Path.Combine(Path.GetTempPath(),
+                    "modkit-gxt-" + Guid.NewGuid().ToString("N") + ".txt");
+                try
+                {
+                    Util.WriteAllTextAtomic(temp, Encoding.UTF8.GetString(request.Body));
+                    Operations.Outcome outcome = Operations.GxtImport(gxtPath, temp, null);
+                    if (!outcome.Ok) return HttpResponse.Error(400, outcome.Message);
+                    Project.OpRecord op = project.AddOp(ParseString(request, "user", project.Owner),
+                        "gxt-import", relative, outcome.Message);
+                    project.Save();
+                    ctx.Workspace.Sessions.NotifyChange(project.Id);
+                    return HttpResponse.Json(Json.O("ok", true, "op", op.ToJson(), "data", outcome.Data));
+                }
+                finally
+                {
+                    try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { }
+                }
+            }
+
             if (tail == "texture-import" && request.Method == "POST")
             {
                 string relative = ParseString(request, "path", "");
