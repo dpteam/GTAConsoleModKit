@@ -84,6 +84,8 @@ namespace ModKit.Cli
                         return RawList(rest);
                     case "raw-wav":
                         return RawWav(rest);
+                    case "lua-strings":
+                        return LuaStrings(rest);
                     case "wav-to-vag":
                         return WavToVag(rest);
                     case "project-list":
@@ -617,6 +619,42 @@ Notes
             Operations.Outcome outcome = Operations.RawToWav(args[0], args.Count > 1 ? args[1] : null,
                 ProgressText());
             PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int LuaStrings(List<string> args)
+        {
+            if (args.Count < 1) return Usage("lua-strings <file.lua.lc> [--numbers]");
+            bool numbers = args.Remove("--numbers");
+            Operations.Outcome outcome = Operations.LuaStrings(args[0]);
+            if (outcome.Ok)
+            {
+                var strings = outcome.Data["strings"] as List<object>;
+                if (strings != null)
+                    foreach (object item in strings)
+                    {
+                        var entry = item as Dictionary<string, object>;
+                        if (entry == null) continue;
+                        Console.WriteLine(string.Format("  {0:x4}  {1}",
+                            Json.GetLong(entry, "offset", 0), Json.GetString(entry, "text", "")));
+                    }
+                if (numbers)
+                {
+                    var values = outcome.Data["numbers"] as List<object>;
+                    if (values != null)
+                        foreach (object item in values)
+                        {
+                            var entry = item as Dictionary<string, object>;
+                            if (entry == null) continue;
+                            object raw;
+                            entry.TryGetValue("value", out raw);
+                            Console.WriteLine(string.Format("  {0:x4}  # {1}",
+                                Json.GetLong(entry, "offset", 0),
+                                raw is double ? ((double)raw).ToString("0.#####", CultureInfo.InvariantCulture) : "?"));
+                        }
+                }
+            }
+            Console.WriteLine(outcome.Message);
             return outcome.Ok ? 0 : 1;
         }
 

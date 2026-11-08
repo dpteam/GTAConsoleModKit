@@ -40,6 +40,9 @@
     { name: 'tex-index', title: 'Текстуры образа', desc: 'Все текстуры всех чанков внутри IMG.', source: 'IMG файл', extra: 'DIR файл (необязательно)' },
     { name: 'tex-export-all', title: 'IMG → PNG', desc: 'Разложить все текстуры образа в PNG + index.txt.', source: 'IMG файл', target: 'Папка', extra: 'DIR файл (необязательно)' },
     { name: 'tex-import-all', title: 'PNG → IMG', desc: 'Вернуть правленые PNG в образ по index.txt (на месте).', source: 'IMG файл', target: 'Папка с PNG', extra: 'DIR файл (необязательно)' },
+    { name: 'raw-list', title: 'RAW: список', desc: 'Сэмплы внутри банка SFX.', source: 'RAW файл' },
+    { name: 'raw-wav', title: 'RAW → WAV', desc: 'Разложить все сэмплы банка в WAV.', source: 'RAW файл', target: 'Папка' },
+    { name: 'lua-strings', title: 'Lua: строки', desc: 'Константы скрипта .LUA.LC (строки и числа).', source: 'LUA.LC файл' },
     { name: 'gxt-dump', title: 'GXT → TXT', desc: 'Дамп строк в текстовый файл.', source: 'GXT файл', target: 'TXT файл' },
     { name: 'vag-to-wav', title: 'VAG → WAV', desc: 'Декодировать PS-ADPCM.', source: 'VAG файл', target: 'WAV файл' }
   ];

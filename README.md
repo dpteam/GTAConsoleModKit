@@ -27,7 +27,8 @@ ModKit.exe identify LOADSC0.CHK
 | `.GXT` (таблицы текста) | да, дамп в редактируемый текст | да (UTF-16, сортировка ключей) |
 | `.VAG` (PS-ADPCM) | да → WAV | да ← WAV |
 | `*.RAW` (банки SFX LCS/VCS) | да: список и раскладка в WAV | — |
-| `.AT3`, `.PMF`/`.PSS`, байткод Lua | идентификация и метаданные | — |
+| `.AT3`, `.PMF`/`.PSS` | идентификация и метаданные | — |
+| `.LUA.LC` (скрипты) | да: константы (строки точно, числа best effort) | — |
 
 Проверено на реальных образах LCS и VCS (см. `docs/FORMATS.md`, там же честный список пробелов).
 
@@ -65,6 +66,7 @@ ModKit.exe iso-list <image.iso>
 ModKit.exe iso-extract <image.iso> [folder]
 ModKit.exe iso-build <folder> [out.iso] [label]
 ModKit.exe build-image <tree> <overrides> <out.iso|.cso> [--cso] [--label X]
+ModKit.exe lua-strings <file.lua.lc> [--numbers]
 ModKit.exe raw-list <file.raw>
 ModKit.exe raw-wav  <file.raw> <folder>
 ModKit.exe tex-index <image.img> [--dir x.dir]
@@ -203,6 +205,7 @@ tools/firewall.cmd / .ps1           правило Windows Firewall (UAC) для
 tools/ci-test.ps1                   всё сразу: сборка, тесты, отчёт
 tools/test-formats.ps1              тест форматов на реальных данных (если они есть)
 tools/test-web.ps1                  тест HTTP API и статики
+docs/LUA.md                        байткод LCS/VCS: что разобрано и почему не unluac
 docs/PIPELINE.md                    от текстуры до играбельного образа (с цифрами)
 docs/DATA.md                        как устроены данные в refs/ и как их пересобрать
 docs/GAME_IMAGES.md                 какие образы идентичны (снимок отчёта)

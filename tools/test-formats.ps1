@@ -539,6 +539,35 @@ if (Test-Path $dtz) {
         ($a.Length -eq $b.Length) -and (-not (Compare-Object $a $b))
     }
 
+    # ------------------------------------------------------------- lua: constants
+    Check "lua-strings reads the constants of a LuaP chunk" {
+        $path = Join-Path $temp 'fake.lua.lc'
+        $stream = New-Object System.IO.MemoryStream
+        $writer = New-Object System.IO.BinaryWriter($stream)
+        # the 18-byte Rockstar header
+        $writer.Write([byte[]](0x1b, 0x4c, 0x75, 0x61, 0x50, 0x01, 0x04, 0x04, 0x04,
+                               0x06, 0x08, 0x09, 0x09, 0x04, 0x3b, 0xaf, 0xef, 0x4b))
+        # string "hello", number 42, string "world"
+        $writer.Write([byte]4); $writer.Write([uint32]6)
+        $writer.Write([System.Text.Encoding]::ASCII.GetBytes('hello')); $writer.Write([byte]0)
+        $writer.Write([byte]3); $writer.Write([single]42.0)
+        $writer.Write([byte]4); $writer.Write([uint32]6)
+        $writer.Write([System.Text.Encoding]::ASCII.GetBytes('world')); $writer.Write([byte]0)
+        $writer.Flush()
+        [System.IO.File]::WriteAllBytes($path, $stream.ToArray())
+        $stream.Dispose()
+
+        $out = Run @('lua-strings', $path, '--numbers')
+        ($out -match 'hello') -and ($out -match 'world') -and ($out -match '# 42') -and
+            ($out -match '2 string\(s\)')
+    }
+
+    Check "lua-strings refuses a file that is not a Lua chunk" {
+        $path = Join-Path $temp 'notlua.bin'
+        [System.IO.File]::WriteAllBytes($path, (New-Object byte[] 64))
+        (Run @('lua-strings', $path)) -match 'not a Lua chunk'
+    }
+
     if (Test-Path $gxt) {
         Check "gxt-dump extracts strings" {
             $txt = Join-Path $temp 'english.txt'

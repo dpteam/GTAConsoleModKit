@@ -1027,5 +1027,40 @@ namespace ModKit
                     "game", info.Game, "details", info.Details)
             };
         }
+
+        // ---------------------------------------------------------------- Lua
+
+        /// <summary>
+        /// Reads a GTA `*.LUA.LC` chunk and returns its constant strings and numbers.
+        /// The bytecode is a Rockstar "LuaP" variant (Lua 5.0 tags, 4-byte floats,
+        /// 18-byte header), so stock decompilers cannot read it - see docs/LUA.md.
+        /// </summary>
+        public static Outcome LuaStrings(string source)
+        {
+            if (!File.Exists(source)) return Outcome.Fail("no such file: " + source);
+            byte[] data = File.ReadAllBytes(source);
+            LuaChunk.Info info = LuaChunk.Read(data);
+            if (!info.IsLua) return Outcome.Fail("not a Lua chunk (no \\x1bLua header): " + source);
+
+            var strings = new List<object>();
+            var numbers = new List<object>();
+            foreach (LuaChunk.Constant constant in info.Constants)
+            {
+                if (constant.IsString)
+                    strings.Add(Json.O("offset", (long)constant.Offset, "text", constant.Text));
+                else
+                    numbers.Add(Json.O("offset", (long)constant.Offset, "value", constant.Number));
+            }
+
+            return new Outcome
+            {
+                Ok = true,
+                Message = info.Header + ": " + info.ConstantStrings + " string(s), " +
+                          info.ConstantNumbers + " number(s)",
+                Data = Json.O("file", source, "header", info.Header,
+                    "strings", strings, "numbers", numbers,
+                    "size", (long)data.Length)
+            };
+        }
     }
 }

@@ -924,6 +924,9 @@ namespace ModKit.Web
                     case "wav-to-vag":
                         outcome = Operations.WavToVag(resolvedSource, resolvedTarget);
                         break;
+                    case "lua-strings":
+                        outcome = Operations.LuaStrings(resolvedSource);
+                        break;
                     default:
                         outcome = Operations.Outcome.Fail("unknown operation: " + name);
                         break;
