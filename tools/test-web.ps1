@@ -295,9 +295,10 @@ Check "build-project packs project files over the base tree" {
         }
     }
 
-    Remove-Item -Recurse -Force $tree, $extract -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force $tree -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force $extract -ErrorAction SilentlyContinue
     Remove-Item -Force $out -ErrorAction SilentlyContinue
-    $ok
+    $ok -and (-not (Test-Path $tree))
 }
 
 # -------------------------------------------------------------------- jobs
