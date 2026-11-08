@@ -68,6 +68,12 @@ namespace ModKit.Cli
                         return ChkExport(rest);
                     case "chk-replace":
                         return ChkReplace(rest);
+                    case "tex-index":
+                        return TexIndex(rest);
+                    case "tex-export-all":
+                        return TexExportAll(rest);
+                    case "tex-import-all":
+                        return TexImportAll(rest);
                     case "gxt-dump":
                         return GxtDump(rest);
                     case "gxt-import":
@@ -123,6 +129,11 @@ DPT.PSP GTA Modding Kit - headless commands
   chk-list <file.chk|.xtx>             list textures
   chk-export <file.chk> [folder]       export every texture as PNG
   chk-replace <chk> <png> [i] [out]    put a PNG back into a texture (mip + palette)
+  tex-index <image.img> [--dir d]      every texture of every chunk in an IMG
+  tex-export-all <img> [folder] [--dir d]
+                                       dump all textures to PNG + index.txt
+  tex-import-all <img> <folder> [--dir d] [--all]
+                                       put the edited PNGs back into the IMG
   gxt-dump <file.gxt> [out.txt]        dump the text table (editable)
   gxt-import <file.gxt> <edited.txt> [out.gxt]   rebuild the GXT from the edited text
   vag-to-wav <file.vag> [out.wav]      decode PS-ADPCM
@@ -392,6 +403,94 @@ Notes
             return 0;
         }
 
+        private static int TexIndex(List<string> args)
+        {
+            string directory = null;
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (args[i] == "--dir" && i + 1 < args.Count)
+                {
+                    directory = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                }
+            }
+            if (args.Count < 1) return Usage("tex-index <image.img> [--dir <dir>]");
+
+            Operations.Outcome outcome = Operations.TexIndex(args[0], directory);
+            if (outcome.Ok)
+            {
+                var chunks = outcome.Data["chunks"] as List<object>;
+                if (chunks != null)
+                    foreach (object item in chunks)
+                    {
+                        var chunk = item as Dictionary<string, object>;
+                        if (chunk == null) continue;
+                        var textures = chunk["textures"] as List<object>;
+                        Console.WriteLine(string.Format("  {0,-16} {1} texture(s)",
+                            Json.GetString(chunk, "entry", ""), textures == null ? 0 : textures.Count));
+                        if (textures == null) continue;
+                        foreach (object entry in textures)
+                        {
+                            var texture = entry as Dictionary<string, object>;
+                            if (texture == null) continue;
+                            Console.WriteLine(string.Format("      [{0,-3}] {1,-28} {2,5}x{3,-5} {4}",
+                                Json.GetLong(texture, "index", 0),
+                                Json.GetString(texture, "name", ""),
+                                Json.GetLong(texture, "width", 0),
+                                Json.GetLong(texture, "height", 0),
+                                Json.GetString(texture, "format", "")));
+                        }
+                    }
+            }
+            Console.WriteLine(outcome.Message);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int TexExportAll(List<string> args)
+        {
+            string directory = null;
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (args[i] == "--dir" && i + 1 < args.Count)
+                {
+                    directory = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                }
+            }
+            if (args.Count < 1) return Usage("tex-export-all <image.img> [folder] [--dir <dir>]");
+
+            Operations.Outcome outcome = Operations.TexExportAll(args[0], directory,
+                args.Count > 1 ? args[1] : null,
+                delegate(string path, int percent) { Console.WriteLine("  " + path); });
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int TexImportAll(List<string> args)
+        {
+            string directory = null;
+            bool all = false;
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (args[i] == "--all") { all = true; args.RemoveAt(i); continue; }
+                if (args[i] == "--dir" && i + 1 < args.Count)
+                {
+                    directory = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                }
+            }
+            if (args.Count < 2)
+                return Usage("tex-import-all <image.img> <folder> [--dir <dir>] [--all]");
+
+            Operations.Outcome outcome = Operations.TexImportAll(args[0], directory, args[1],
+                all, ProgressText());
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
         private static int ChkListCommand(List<string> args)
         {
             if (args.Count < 1) return Usage("chk-list <file.chk>");
@@ -534,6 +633,15 @@ Notes
             return delegate(int percent)
             {
                 if (percent % 10 == 0) Console.Write("\r  " + percent.ToString(CultureInfo.InvariantCulture) + "% ");
+            };
+        }
+
+        /// <summary>Progress sink for operations that report a file name instead of a percentage.</summary>
+        private static Action<string, int> ProgressText()
+        {
+            return delegate(string label, int count)
+            {
+                Console.Write("\r  " + count.ToString(CultureInfo.InvariantCulture) + "  " + label + "          ");
             };
         }
 

@@ -35,6 +35,9 @@
     { name: 'dtz-dir', title: 'DTZ → DIR', desc: 'Экспорт .DIR для соответствующего IMG.', source: 'GAME.DTZ', target: 'DIR файл' },
     { name: 'chk-list', title: 'CHK: список', desc: 'Текстуры внутри CHK/XTX.', source: 'CHK файл' },
     { name: 'chk-export', title: 'CHK → PNG', desc: 'Разложить все текстуры в PNG.', source: 'CHK файл', target: 'Папка' },
+    { name: 'tex-index', title: 'Текстуры образа', desc: 'Все текстуры всех чанков внутри IMG.', source: 'IMG файл', extra: 'DIR файл (необязательно)' },
+    { name: 'tex-export-all', title: 'IMG → PNG', desc: 'Разложить все текстуры образа в PNG + index.txt.', source: 'IMG файл', target: 'Папка', extra: 'DIR файл (необязательно)' },
+    { name: 'tex-import-all', title: 'PNG → IMG', desc: 'Вернуть правленые PNG в образ по index.txt (на месте).', source: 'IMG файл', target: 'Папка с PNG', extra: 'DIR файл (необязательно)' },
     { name: 'gxt-dump', title: 'GXT → TXT', desc: 'Дамп строк в текстовый файл.', source: 'GXT файл', target: 'TXT файл' },
     { name: 'vag-to-wav', title: 'VAG → WAV', desc: 'Декодировать PS-ADPCM.', source: 'VAG файл', target: 'WAV файл' }
   ];

@@ -346,6 +346,82 @@ if (Test-Path $dtz) {
             $out = Run @('chk-replace', $copy, $png, '1')
             $out -match 'out of range'
         }
+
+        Check "tex-index lists textures and ignores models in the same IMG" {
+            $src = Join-Path $temp 'tex-src'
+            New-Item -ItemType Directory -Path $src -Force | Out-Null
+            Copy-Item $chk (Join-Path $src 'LOADSC0.CHK') -Force
+            [System.IO.File]::WriteAllBytes((Join-Path $src 'MODEL.MDL'), (New-Object byte[] 4096))
+
+            $texImg = Join-Path $temp 'tex.img'
+            $texDir = Join-Path $temp 'tex.dir'
+            Run @('img-pack', $src, $texImg, '--dir', $texDir) | Out-Null
+
+            $out = Run @('tex-index', $texImg, '--dir', $texDir)
+            ($out -match '1 textures in 1 chunk') -and ($out -match 'LOADSC0\.CHK') -and
+                ($out -match '512x256') -and ($out -notmatch 'MODEL\.MDL +\d+ texture')
+        }
+
+        Check "tex-export-all then tex-import-all applies one edited PNG in place" {
+            $texImg = Join-Path $temp 'tex.img'
+            $texDir = Join-Path $temp 'tex.dir'
+            $folder = Join-Path $temp 'tex-png'
+
+            $export = Run @('tex-export-all', $texImg, $folder, '--dir', $texDir)
+            $index = Join-Path $folder 'index.txt'
+            $png = Join-Path $folder 'loadsc0_chk\loadsc0.png'
+
+            # paint one pixel so the imported texture is recognisably different
+            Add-Type -AssemblyName System.Drawing
+            $bytes = [System.IO.File]::ReadAllBytes($png)
+            $stream = New-Object System.IO.MemoryStream(, $bytes)
+            $bitmap = [System.Drawing.Bitmap]::FromStream($stream)
+            $bitmap.SetPixel(1, 1, [System.Drawing.Color]::FromArgb(255, 0, 255))
+            $outStream = New-Object System.IO.MemoryStream
+            $bitmap.Save($outStream, [System.Drawing.Imaging.ImageFormat]::Png)
+            $bitmap.Dispose()
+            [System.IO.File]::WriteAllBytes($png, $outStream.ToArray())
+
+            $before = (Get-Item $texImg).Length
+            $import = Run @('tex-import-all', $texImg, $folder, '--dir', $texDir)
+            $after = (Get-Item $texImg).Length
+
+            # read the texture back out of the patched archive
+            $check = Join-Path $temp 'tex-check'
+            Run @('img-extract', $texImg, $check, '--dir', $texDir) | Out-Null
+            $back = Join-Path $temp 'tex-back'
+            Run @('chk-export', (Join-Path $check 'LOADSC0.CHK'), $back) | Out-Null
+
+            $pixelOk = $false
+            $backPng = Join-Path $back 'loadsc0.png'
+            if (Test-Path $backPng) {
+                $b2 = [System.IO.File]::ReadAllBytes($backPng)
+                $s2 = New-Object System.IO.MemoryStream(, $b2)
+                $bmp2 = [System.Drawing.Bitmap]::FromStream($s2)
+                $p = $bmp2.GetPixel(1, 1)
+                $pixelOk = ($p.R -eq 255) -and ($p.G -eq 0) -and ($p.B -eq 255)
+                $bmp2.Dispose()
+            }
+
+            ($export -match '1 texture') -and (Test-Path $index) -and
+                ($import -match 'replaced 1 texture') -and ($before -eq $after) -and $pixelOk
+        }
+
+        Check "tex-import-all does nothing when no PNG was edited" {
+            $texImg = Join-Path $temp 'tex.img'
+            $texDir = Join-Path $temp 'tex.dir'
+            $fresh = Join-Path $temp 'tex-png2'
+            Run @('tex-export-all', $texImg, $fresh, '--dir', $texDir) | Out-Null
+            $out = Run @('tex-import-all', $texImg, $fresh, '--dir', $texDir)
+            $out -match 'no edited PNGs' -and $out -match '--all'
+        }
+
+        Check "chk-list refuses a model chunk instead of inventing textures" {
+            $text = ''
+            try { $text = Run @('chk-list', (Join-Path $temp 'tex-src\MODEL.MDL')) }
+            catch { $text = $_.Exception.Message }
+            $text -match "not a texture chunk"
+        }
     } else { Skip "chk tests" "no LOADSC0.CHK" }
 
     if (Test-Path $gxt) {

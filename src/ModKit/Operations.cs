@@ -517,6 +517,284 @@ namespace ModKit
             };
         }
 
+        // -------------------------------------------------------- texture pack
+
+        /// <summary>
+        /// Looks up an IMG entry and parses it as a texture dictionary. Returns null
+        /// for entries that are not CHK chunks (models, audio, anything else) -
+        /// an archive is a mixed bag and a wrong guess must not stop the scan.
+        /// </summary>
+        private static ChkFile ReadTextureChunk(ImgArchive archive, ImgArchive.Entry entry)
+        {
+            try
+            {
+                byte[] data = archive.ReadEntry(entry);
+                if (data == null || data.Length < 64) return null;
+                ChkFile chk = ChkFile.Parse(data);
+                if (chk.Textures.Count == 0)
+                    Log.Debug(Cat.Fmt, "texture chunk without textures: " + entry.Name);
+                return chk.Textures.Count > 0 ? chk : null;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(Cat.Fmt, "not a texture chunk: " + entry.Name + " (" + Log.Describe(ex) + ")");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Lists every texture of every chunk inside an IMG archive. This is the
+        /// "what can I retexture in here" answer: 585 textures in GTA3PSPHR.IMG.
+        /// </summary>
+        public static Outcome TexIndex(string image, string directory)
+        {
+            if (!File.Exists(image)) return Outcome.Fail("no such IMG: " + image);
+
+            ImgArchive archive = ImgArchive.Open(image, directory);
+            var entries = new List<object>();
+            int total = 0;
+
+            foreach (ImgArchive.Entry entry in archive.Entries)
+            {
+                ChkFile chk = ReadTextureChunk(archive, entry);
+                if (chk == null) continue;
+
+                var textures = new List<object>();
+                for (int i = 0; i < chk.Textures.Count; i++)
+                {
+                    ChkFile.Texture texture = chk.Textures[i];
+                    textures.Add(Json.O(
+                        "index", (long)i,
+                        "name", texture.Name,
+                        "width", (long)texture.Width,
+                        "height", (long)texture.Height,
+                        "format", Rsl.FormatName(texture.Format)));
+                }
+
+                entries.Add(Json.O(
+                    "entry", entry.Name,
+                    "sector", (long)entry.OffsetSectors,
+                    "sectors", (long)entry.SizeSectors,
+                    "textures", textures));
+                total += chk.Textures.Count;
+            }
+
+            return new Outcome
+            {
+                Ok = true,
+                Message = total + " textures in " + entries.Count + " chunk(s) of " +
+                          Path.GetFileName(image),
+                Data = Json.O("image", image, "format", archive.Format,
+                    "chunks", entries, "textures", (long)total)
+            };
+        }
+
+        /// <summary>
+        /// Dumps every texture of an IMG archive to PNG and writes an index that
+        /// maps each file back to its chunk and texture name, so
+        /// <c>tex-import-all</c> can put the edits back without guessing.
+        /// </summary>
+        public static Outcome TexExportAll(string image, string directory, string target,
+            Action<string, int> progress)
+        {
+            if (!File.Exists(image)) return Outcome.Fail("no such IMG: " + image);
+
+            ImgArchive archive = ImgArchive.Open(image, directory);
+            if (string.IsNullOrEmpty(target))
+                target = Path.ChangeExtension(image, null) + "_textures";
+            Directory.CreateDirectory(target);
+
+            var index = new List<string>();
+            index.Add("# entry\ttexture\tfile\tsize\tformat");
+            int written = 0, chunks = 0, failed = 0;
+
+            foreach (ImgArchive.Entry entry in archive.Entries)
+            {
+                ChkFile chk = ReadTextureChunk(archive, entry);
+                if (chk == null) continue;
+                chunks++;
+
+                string folderName = Util.Slug(entry.Name);
+                var used = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (ChkFile.Texture texture in chk.Textures)
+                {
+                    string name = Util.Slug(texture.Name);
+                    int seen;
+                    if (used.TryGetValue(name, out seen))
+                    {
+                        seen++;
+                        used[name] = seen;
+                        name = name + "_" + seen;
+                    }
+                    else
+                    {
+                        used[name] = 0;
+                    }
+
+                    string relative = folderName + "/" + name + ".png";
+                    string path = Path.Combine(target, folderName, name + ".png");
+                    try
+                    {
+                        chk.ExportPng(texture, path);
+                        written++;
+                        index.Add(string.Format("{0}\t{1}\t{2}\t{3}x{4}\t{5}",
+                            entry.Name, texture.Name ?? "", relative,
+                            texture.Width, texture.Height, Rsl.FormatName(texture.Format)));
+                    }
+                    catch (Exception ex)
+                    {
+                        failed++;
+                        Log.Warn(Cat.Fmt, "cannot export " + entry.Name + "/" + texture.Name +
+                                          ": " + Log.Describe(ex));
+                    }
+                    if (progress != null) progress(relative, written);
+                }
+            }
+
+            Util.WriteAllTextAtomic(Path.Combine(target, "index.txt"),
+                string.Join("\n", index.ToArray()) + "\n");
+
+            return new Outcome
+            {
+                Ok = true,
+                Message = "exported " + written + " texture(s) from " + chunks +
+                          " chunk(s) to " + target + (failed > 0 ? ", " + failed + " failed" : ""),
+                Data = Json.O("target", target, "textures", (long)written,
+                    "chunks", (long)chunks, "failed", (long)failed)
+            };
+        }
+
+        /// <summary>
+        /// Puts edited PNGs back into the IMG: every file listed in the index is
+        /// written into its own chunk, then each changed chunk is written back to
+        /// the archive in place. A chunk that no longer fits its sector span is
+        /// reported instead of being written over the next entry.
+        /// </summary>
+        public static Outcome TexImportAll(string image, string directory, string source, bool force,
+            Action<string, int> progress)
+        {
+            if (!File.Exists(image)) return Outcome.Fail("no such IMG: " + image);
+            if (!Directory.Exists(source)) return Outcome.Fail("no such folder: " + source);
+
+            string indexPath = Path.Combine(source, "index.txt");
+            if (!File.Exists(indexPath))
+                return Outcome.Fail("index.txt not found in " + source +
+                    " - export with tex-export-all first, it maps every PNG back to its texture");
+
+            // Files are written before the index, so "newer than index.txt" means
+            // "edited by hand". Without this a batch import would re-encode all
+            // 3019 textures of the game to import a single recoloured one.
+            DateTime indexTime = File.GetLastWriteTimeUtc(indexPath);
+            ImgArchive archive = ImgArchive.Open(image, directory);
+
+            // entry name -> list of (png, texture name), in index order
+            var plan = new List<string>();
+            var byEntry = new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+            int unchanged = 0;
+            foreach (string line in File.ReadAllLines(indexPath))
+            {
+                if (string.IsNullOrEmpty(line) || line[0] == '#') continue;
+                string[] parts = line.Split('\t');
+                if (parts.Length < 3) continue;
+
+                string png = Path.Combine(source, parts[2].Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(png)) continue;      // a deleted PNG means "keep the original"
+                if (!force && File.GetLastWriteTimeUtc(png) <= indexTime)
+                {
+                    unchanged++;
+                    continue;
+                }
+
+                List<string[]> list;
+                if (!byEntry.TryGetValue(parts[0], out list))
+                {
+                    list = new List<string[]>();
+                    byEntry[parts[0]] = list;
+                    plan.Add(parts[0]);
+                }
+                list.Add(new[] { png, parts[1] });
+            }
+
+            if (plan.Count == 0)
+            {
+                Outcome nothing = Outcome.Fail("no edited PNGs to import (" + unchanged +
+                    " unchanged) - edit a texture and run again, or pass --all");
+                nothing.Data = Json.O("image", image, "textures", 0L, "unchanged", (long)unchanged);
+                return nothing;
+            }
+
+            int replaced = 0, entriesWritten = 0;
+            var skipped = new List<string>();
+            var problems = new List<string>();
+
+            foreach (string entryName in plan)
+            {
+                ImgArchive.Entry entry = archive.Find(entryName);
+                if (entry == null)
+                {
+                    skipped.Add(entryName + ": not in this IMG");
+                    continue;
+                }
+
+                string temp = Path.Combine(Path.GetTempPath(),
+                    "modkit-tex-" + Guid.NewGuid().ToString("N") + ".chk");
+                try
+                {
+                    File.WriteAllBytes(temp, archive.ReadEntry(entry));
+                    int changed = 0;
+                    foreach (string[] item in byEntry[entryName])
+                    {
+                        Outcome result = ChkReplace(temp, item[0], -1, item[1], null);
+                        if (result.Ok) changed++;
+                        else problems.Add(entryName + "/" + Path.GetFileName(item[0]) + ": " + result.Message);
+                        if (progress != null) progress(entryName + "/" + Path.GetFileName(item[0]), changed);
+                    }
+
+                    if (changed == 0) continue;
+
+                    string message;
+                    if (archive.Replace(entry, temp, out message))
+                    {
+                        replaced += changed;
+                        entriesWritten++;
+                    }
+                    else
+                    {
+                        skipped.Add(entryName + ": " + message);
+                    }
+                }
+                finally
+                {
+                    try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { }
+                }
+            }
+
+            var data = Json.O(
+                "image", image,
+                "textures", (long)replaced,
+                "chunks", (long)entriesWritten,
+                "unchanged", (long)unchanged,
+                "skipped", skipped,
+                "problems", problems);
+
+            if (replaced == 0)
+            {
+                Outcome fail = Outcome.Fail("nothing was replaced" +
+                    (skipped.Count > 0 ? " (" + skipped[0] + ")" : " (index has no matching PNGs)"));
+                fail.Data = data;
+                return fail;
+            }
+
+            return new Outcome
+            {
+                Ok = true,
+                Message = "replaced " + replaced + " texture(s) in " + entriesWritten +
+                          " chunk(s), " + unchanged + " unchanged" +
+                          (skipped.Count > 0 ? ", " + skipped.Count + " skipped" : ""),
+                Data = data
+            };
+        }
+
         // ---------------------------------------------------------------- GXT
 
         public static Outcome GxtDump(string source, string target)

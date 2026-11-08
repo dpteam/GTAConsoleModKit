@@ -22,6 +22,7 @@ ModKit.exe identify LOADSC0.CHK
 | Таблица стриминга `GAME.DAT` → `.DIR` | да, LCS и VCS (сверено с чанками IMG) | экспорт DIR |
 | `.LVZ` (zlib + чанк `WRLD`) | да | пересжатие |
 | `.CHK` / `.XTX` (текстуры) | да: список, палитра, swizzle, mip, PNG | да: PNG → текстура (pal4/pal8) |
+| текстуры всего IMG (`tex-*`) | да: индекс, пакетный экспорт в PNG + `index.txt` | да: пакетный импорт на место |
 | `.MDL`, `.ANIM` (чанки `ldm`/`anim`) | заголовок и границы | — |
 | `.GXT` (таблицы текста) | да, дамп в редактируемый текст | да (UTF-16, сортировка ключей) |
 | `.VAG` (PS-ADPCM) | да → WAV | да ← WAV |
@@ -63,6 +64,9 @@ ModKit.exe iso-list <image.iso>
 ModKit.exe iso-extract <image.iso> [folder]
 ModKit.exe iso-build <folder> [out.iso] [label]
 ModKit.exe build-image <tree> <overrides> <out.iso|.cso> [--cso] [--label X]
+ModKit.exe tex-index <image.img> [--dir x.dir]
+ModKit.exe tex-export-all <image.img> <folder> [--dir x.dir]
+ModKit.exe tex-import-all <image.img> <folder> [--dir x.dir] [--all]
 ModKit.exe img-list <image.img> [dir]
 ModKit.exe img-extract <img> [folder] [--dir <dir>]
 ModKit.exe img-replace <img> <entry> <file> [--dir <dir>]

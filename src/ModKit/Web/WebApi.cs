@@ -621,6 +621,18 @@ namespace ModKit.Web
                     case "chk-export":
                         outcome = Operations.ChkExport(resolvedSource, resolvedTarget);
                         break;
+                    case "tex-index":
+                        outcome = Operations.TexIndex(resolvedSource, extra);
+                        break;
+                    case "tex-export-all":
+                        outcome = Operations.TexExportAll(resolvedSource, extra, resolvedTarget,
+                            delegate(string path, int count) { j.Note(path); });
+                        break;
+                    case "tex-import-all":
+                        outcome = Operations.TexImportAll(resolvedSource, extra, resolvedTarget,
+                            Json.GetBool(body, "all", false),
+                            delegate(string path, int count) { j.Note(path); });
+                        break;
                     case "gxt-dump":
                         outcome = Operations.GxtDump(resolvedSource, resolvedTarget);
                         break;

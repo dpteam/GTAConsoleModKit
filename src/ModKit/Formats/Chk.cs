@@ -75,6 +75,15 @@ namespace ModKit.Formats
             var result = new ChkFile { Data = data };
             result.Header = ChunkHeader.Parse(data, baseOffset);
 
+            // A texture dictionary has its own chunk id ("tex"/"xtx"). Model chunks
+            // ("mdl"), world chunks ("WRLD") and random data would otherwise be
+            // "parsed" into nonsense textures - an archive is a mixed bag, so this
+            // check is what tells a texture chunk apart from everything else.
+            string ident = result.Header.Ident ?? "";
+            if (!string.Equals(ident, "tex", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(ident, "xtx", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("not a texture chunk (id '" + ident + "')");
+
             int chunkEnd = Math.Min(limit, baseOffset + (int)result.Header.FileEnd);
             if (chunkEnd > data.Length) chunkEnd = data.Length;
 
