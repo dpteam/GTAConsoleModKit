@@ -305,6 +305,18 @@ textarea { resize: vertical; }
 .pill.code { color: var(--accent); border-color: var(--accent-2); background: rgba(90, 140, 190, .1); letter-spacing: .5px; }
 .pill.ok { color: var(--ok); border-color: var(--ok); background: rgba(47, 143, 87, .1); }
 
+/* dark/oled: the muted blues need more light to stay readable */
+body[data-theme="dark"] .pill.code,
+body[data-theme="oled"] .pill.code { color: #9ccbf3; border-color: #4d84b8; background: rgba(77, 132, 184, .18); }
+body[data-theme="dark"] .tab2.active,
+body[data-theme="oled"] .tab2.active { color: #9ccbf3; border-bottom-color: #9ccbf3; }
+body[data-theme="dark"] .op-row .who,
+body[data-theme="oled"] .op-row .who { color: #9ccbf3; }
+body[data-theme="dark"] .file.active,
+body[data-theme="oled"] .file.active { color: #9ccbf3; background: rgba(77, 132, 184, .22); }
+body[data-theme="dark"] .session-code,
+body[data-theme="oled"] .session-code { color: #9ccbf3; }
+
 /* ----------------------------------------------------------- breadcrumb */
 
 .crumb { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
