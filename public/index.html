@@ -131,23 +131,33 @@
           <h2 data-i18n="files.title">Файлы</h2>
           <div class="files-tools">
             <button class="btn tiny" id="add-folder" data-i18n="files.addFolder" data-i18n-title="files.addFolderTitle">+ Папка</button>
-            <label class="upload">
+            <label class="upload" data-i18n-title="files.uploadFolderTitle">
+              <input type="file" id="folder-input" webkitdirectory directory multiple>
+              <span data-i18n="files.uploadFolder">+ С ПК</span>
+            </label>
+            <label class="upload" data-i18n-title="files.uploadTitle">
               <input type="file" id="file-input" multiple>
               <span data-i18n="files.add">+ Файлы</span>
             </label>
           </div>
         </div>
-        <div class="add-folder hidden" id="add-folder-box">
-          <input type="text" id="add-folder-path" data-i18n-ph="files.addFolderPh"
-                 placeholder="Путь к папке, например E:\Games\LCS\PSP_GAME">
-          <input type="text" id="add-folder-as" data-i18n-ph="files.addFolderAsPh"
-                 placeholder="Имя в проекте (необязательно)">
-          <div class="add-folder-buttons">
-            <button class="btn tiny" id="add-folder-run" data-i18n="files.addFolderRun">Добавить папку</button>
-            <button class="btn tiny ghost" id="new-folder-run" data-i18n="files.newFolderRun">Пустая папка</button>
-            <button class="btn tiny ghost" id="add-folder-cancel" data-i18n="files.cancel">Отмена</button>
+
+        <div class="folder-picker hidden" id="folder-picker">
+          <div class="fp-path" id="fp-path"></div>
+          <div class="fp-list scroll" id="fp-list"></div>
+          <div class="fp-actions">
+            <button class="btn tiny" id="fp-choose" data-i18n="files.pickThis">Добавить эту папку</button>
+            <button class="btn tiny ghost" id="fp-cancel" data-i18n="files.cancel">Отмена</button>
+          </div>
+          <div class="fp-manual">
+            <input type="text" id="fp-manual-path" data-i18n-ph="files.addFolderPh"
+                   placeholder="или вставьте путь к папке">
+            <input type="text" id="fp-manual-as" data-i18n-ph="files.addFolderAsPh"
+                   placeholder="имя в проекте (необязательно)">
+            <button class="btn tiny ghost" id="fp-manual-add" data-i18n="files.addFolderRun">Добавить путь</button>
           </div>
         </div>
+
         <div class="panel-body scroll" id="file-list">
           <div class="empty" data-i18n="files.empty">Пусто. Загрузите файлы, добавьте папку или распакуйте ISO в папку проекта.</div>
         </div>

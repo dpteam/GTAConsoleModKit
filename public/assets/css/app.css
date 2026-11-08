@@ -393,6 +393,58 @@ body[data-theme="oled"] .session-code { color: #9ccbf3; }
 }
 .add-folder-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* ---------------------------------------------------------- folder picker */
+
+.folder-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.fp-path {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-soft);
+  word-break: break-all;
+}
+.crumb {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 0 1px;
+  cursor: pointer;
+}
+.crumb:hover { text-decoration: underline; }
+.crumb-sep { color: var(--text-soft); }
+.fp-list {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  padding: 3px;
+}
+.fp-list .file.root .file-name { font-family: var(--mono); }
+.fp-actions, .fp-manual { display: flex; gap: 6px; flex-wrap: wrap; }
+.fp-manual { flex-direction: column; }
+.fp-manual input {
+  width: 100%;
+  font-size: 10.5px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
 .tree { display: flex; flex-direction: column; }
 .tree-total {
   margin-top: 8px;

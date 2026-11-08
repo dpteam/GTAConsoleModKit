@@ -193,6 +193,17 @@ namespace ModKit.Core
             {
                 string destination = Path.Combine(target, Path.GetFileName(file));
                 File.Copy(file, destination, true);
+
+                // File.Copy keeps the attributes, and a read-only file inside a project
+                // can never be edited again ("access denied" when a texture is written).
+                // Copies are ours: make them writable.
+                FileAttributes attributes = File.GetAttributes(destination);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                {
+                    try { File.SetAttributes(destination, attributes & ~FileAttributes.ReadOnly); }
+                    catch (Exception) { }
+                }
+
                 stats.Files++;
                 stats.Bytes += new FileInfo(destination).Length;
             }
@@ -201,6 +212,46 @@ namespace ModKit.Core
             {
                 CopyTreeInto(directory, Path.Combine(target, Path.GetFileName(directory)), stats);
             }
+        }
+
+        /// <summary>
+        /// Deletes a file or a folder tree, clearing the read-only flag on the way:
+        /// Directory.Delete(path, true) stops at the first read-only file (git packs,
+        /// files copied from a CD) and leaves a half-deleted folder behind.
+        /// </summary>
+        public static void DeleteTree(string path)
+        {
+            if (File.Exists(path))
+            {
+                ClearReadOnly(path);
+                File.Delete(path);
+                return;
+            }
+            if (!Directory.Exists(path)) return;
+
+            foreach (string file in Directory.GetFiles(path))
+            {
+                ClearReadOnly(file);
+                File.Delete(file);
+            }
+            foreach (string directory in Directory.GetDirectories(path))
+            {
+                DeleteTree(directory);
+            }
+
+            ClearReadOnly(path);
+            Directory.Delete(path);
+        }
+
+        private static void ClearReadOnly(string path)
+        {
+            try
+            {
+                FileAttributes attributes = File.GetAttributes(path);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+            }
+            catch (Exception) { }
         }
 
         public static ulong Fnv1a64(string text)

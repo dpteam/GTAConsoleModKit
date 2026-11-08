@@ -21,7 +21,8 @@
     opsRenderCount: 0,
     logsFollow: true,
     filter: '',
-    expanded: {}
+    expanded: {},
+    browse: null
   };
 
   var OP_DEFS = [
@@ -757,15 +758,31 @@
     if (!fileList || !fileList.length || !state.projectId) return;
     var files = Array.prototype.slice.call(fileList);
     var index = 0;
+    var failed = 0;
+    var single = files.length === 1;
+
+    if (!single) toast(t('toast.uploadingMany', files.length), 'warn');
 
     function next() {
-      if (index >= files.length) { refreshProject(); return; }
+      if (index >= files.length) {
+        if (!single) toast(t('toast.uploadedMany', files.length - failed, files.length), 'ok');
+        refreshProject();
+        return;
+      }
       var file = files[index++];
-      API.upload(state.projectId, file.name, file).then(function () {
-        toast(t('toast.uploaded', file.name), 'ok');
+
+      // a folder pick on the client gives webkitRelativePath ("FOLDER/SUB/file"),
+      // which is exactly the layout we want inside the project
+      var target = file.webkitRelativePath && file.webkitRelativePath.length
+        ? file.webkitRelativePath
+        : file.name;
+
+      API.upload(state.projectId, target, file).then(function () {
+        if (single) toast(t('toast.uploaded', target), 'ok');
         next();
-      }).catch(function (error) {
-        fail(error);
+      }, function (error) {
+        failed++;
+        if (single) fail(error);
         next();
       });
     }
@@ -774,47 +791,128 @@
 
   // ---------------------------------------------------------- add folder
 
+  /// The picker shows what the *server* sees. A browser on another machine cannot
+  /// hand over its own paths: T:\ on the client simply does not exist for the
+  /// server. For files that live only on the client there is "+ С ПК"
+  /// (webkitdirectory) which uploads them.
   function toggleAddFolder(show) {
-    var box = $('add-folder-box');
-    if (show) {
-      box.classList.remove('hidden');
-      $('add-folder-path').focus();
+    var picker = $('folder-picker');
+    var list = $('file-list');
+    if (!show) {
+      picker.classList.add('hidden');
+      list.classList.remove('hidden');
       return;
     }
-    box.classList.add('hidden');
-    $('add-folder-path').value = '';
-    $('add-folder-as').value = '';
+    picker.classList.remove('hidden');
+    list.classList.add('hidden');
+    var last = '';
+    try { last = localStorage.getItem('dpt.addFolder.last') || ''; } catch (e) { }
+    browseTo(last);
   }
 
-  function addFolder() {
-    var path = $('add-folder-path').value.trim();
-    if (!path) { $('add-folder-path').focus(); return; }
-    var name = $('add-folder-as').value.trim();
-    var button = $('add-folder-run');
-    button.disabled = true;
-    API.addFolder(state.projectId, path, name).then(function (data) {
+  function browseTo(path) {
+    API.browse(path).then(function (data) {
+      state.browse = data;
+      try { localStorage.setItem('dpt.addFolder.last', data.path || ''); } catch (e) { }
+      renderPicker(data);
+    }).catch(function (error) {
+      // remembered path no longer allowed/exists: fall back to the root list
+      try { localStorage.removeItem('dpt.addFolder.last'); } catch (e) { }
+      API.browse('').then(function (data) {
+        state.browse = data;
+        renderPicker(data);
+      }).catch(fail);
+    });
+  }
+
+  function renderPicker(data) {
+    var pathBox = $('fp-path');
+    clear(pathBox);
+
+    if (!data.path) {
+      pathBox.appendChild(el('span', 'crumb muted', t('files.pickRoot')));
+    } else {
+      var parts = data.path.split('\\');
+      var built = '';
+      for (var i = 0; i < parts.length; i++) {
+        built = i === 0 ? parts[0] : built + '\\' + parts[i];
+        (function (target, label) {
+          if (!label) return;
+          var crumb = el('button', 'crumb', label);
+          crumb.addEventListener('click', function () { browseTo(target); });
+          pathBox.appendChild(crumb);
+          pathBox.appendChild(el('span', 'crumb-sep', '\\'));
+        })(built, parts[i]);
+      }
+    }
+
+    var list = $('fp-list');
+    clear(list);
+
+    if (data.parent) {
+      var up = el('div', 'file dir');
+      up.appendChild(el('span', 'caret', '↑'));
+      up.appendChild(el('span', 'file-name', '..'));
+      up.addEventListener('click', function () { browseTo(data.parent); });
+      list.appendChild(up);
+    }
+
+    var roots = data.roots || [];
+    if (!data.path && roots.length) {
+      for (var r = 0; r < roots.length; r++) {
+        (function (root) {
+          var row = el('div', 'file dir root');
+          row.appendChild(el('span', 'caret', '◆'));
+          row.appendChild(el('span', 'file-name', root.path));
+          row.addEventListener('click', function () { browseTo(root.path); });
+          list.appendChild(row);
+        })(roots[r]);
+      }
+      if (!roots.length) list.appendChild(el('div', 'empty', t('files.noRoots')));
+      return;
+    }
+
+    var folders = data.folders || [];
+    if (!folders.length) {
+      list.appendChild(el('div', 'empty', t('files.noSubfolders')));
+    }
+    for (var f = 0; f < folders.length; f++) {
+      (function (folder) {
+        var row = el('div', 'file dir');
+        row.appendChild(el('span', 'caret', '▸'));
+        row.appendChild(el('span', 'file-name', folder.name));
+        if (folder.files > 0)
+          row.appendChild(el('span', 'file-count', t('files.shortCount', folder.files)));
+        else if (folder.folders > 0)
+          row.appendChild(el('span', 'file-count', t('files.shortFolders', folder.folders)));
+        row.addEventListener('click', function () { browseTo(folder.path); });
+        list.appendChild(row);
+      })(folders[f]);
+    }
+  }
+
+  function currentBrowsePath() {
+    return state.browse && state.browse.path ? state.browse.path : '';
+  }
+
+  function addFolder(path, asName, button) {
+    if (!path) { toast(t('files.pickFirst'), 'warn'); return; }
+    if (button) button.disabled = true;
+    API.addFolder(state.projectId, path, asName).then(function (data) {
       toast(t('files.added', data.folder, data.files, fmtSize(data.bytes)), 'ok');
       global.Sound.play('ok');
+      try { localStorage.setItem('dpt.addFolder.last', path); } catch (e) { }
       toggleAddFolder(false);
       refreshProject();
     }, function (error) {
       fail(error);
-    }).then(function () { button.disabled = false; });
+    }).then(function () { if (button) button.disabled = false; });
   }
 
-  function newFolder() {
-    var name = $('add-folder-as').value.trim();
-    if (!name) {
-      toast(t('files.nameRequired'), 'err');
-      $('add-folder-as').focus();
-      return;
-    }
-    API.mkdir(state.projectId, name).then(function (data) {
-      toast(t('files.created', data.path), 'ok');
-      toggleAddFolder(false);
-      state.expanded[data.path] = true;
-      refreshProject();
-    }).catch(fail);
+  function addFolderManual() {
+    var path = $('fp-manual-path').value.trim();
+    if (!path) { $('fp-manual-path').focus(); return; }
+    addFolder(path, $('fp-manual-as').value.trim(), $('fp-manual-add'));
   }
 
   // ------------------------------------------------------------------- logs
@@ -975,17 +1073,24 @@
       this.value = '';
     });
 
+    $('folder-input').addEventListener('change', function () {
+      uploadFiles(this.files);
+      this.value = '';
+    });
+
     $('add-folder').addEventListener('click', function () {
-      toggleAddFolder($('add-folder-box').classList.contains('hidden'));
+      toggleAddFolder($('folder-picker').classList.contains('hidden'));
     });
-    $('add-folder-run').addEventListener('click', addFolder);
-    $('new-folder-run').addEventListener('click', newFolder);
-    $('add-folder-cancel').addEventListener('click', function () { toggleAddFolder(false); });
-    $('add-folder-path').addEventListener('keydown', function (event) {
-      if (event.keyCode === 13) addFolder();
+    $('fp-choose').addEventListener('click', function () {
+      addFolder(currentBrowsePath(), '', this);
     });
-    $('add-folder-as').addEventListener('keydown', function (event) {
-      if (event.keyCode === 13) addFolder();
+    $('fp-cancel').addEventListener('click', function () { toggleAddFolder(false); });
+    $('fp-manual-add').addEventListener('click', addFolderManual);
+    $('fp-manual-path').addEventListener('keydown', function (event) {
+      if (event.keyCode === 13) addFolderManual();
+    });
+    $('fp-manual-as').addEventListener('keydown', function (event) {
+      if (event.keyCode === 13) addFolderManual();
       if (event.keyCode === 27) toggleAddFolder(false);
     });
 

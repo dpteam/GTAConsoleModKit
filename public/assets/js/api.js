@@ -51,6 +51,9 @@
       return request('POST', '/api/projects/' + encode(id) + '/folder',
         JSON.stringify({ path: path, as: as || '' }));
     },
+    browse: function (path) {
+      return request('GET', '/api/fs?path=' + encode(path || ''));
+    },
     mkdir: function (id, path) {
       return request('POST', '/api/projects/' + encode(id) + '/mkdir', JSON.stringify({ path: path }));
     },

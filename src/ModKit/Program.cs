@@ -119,8 +119,39 @@ namespace ModKit
                 Math.Max(1, context.Config.GetInt("server.workers", 2)),
                 context.Config.GetInt("limits.maxJobHistory", 200));
 
+            // What the web UI may read from. workspace and gamesRoot are always in;
+            // "workspace.roots" adds more (a drive, a share, another dump folder).
+            // Without any configured root the whole toolkit folder is allowed, which
+            // keeps refs\ usable out of the box.
+            var allowed = new List<string>();
+            allowed.Add(workspaceRoot);
+            if (gamesRoot.Length > 0) allowed.Add(gamesRoot);
+
+            string configuredRoots = context.Config.Get("workspace.roots", "");
+            bool anyConfigured = false;
+            foreach (string piece in configuredRoots.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string root = piece.Trim();
+                if (root.Length == 0) continue;
+                if (!Path.IsPathRooted(root)) root = Path.Combine(baseDirectory, root);
+                allowed.Add(root);
+                anyConfigured = true;
+            }
+            if (!anyConfigured)
+            {
+                string toolkitRoot = Directory.GetParent(baseDirectory.TrimEnd(
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) == null
+                    ? baseDirectory
+                    : Directory.GetParent(baseDirectory.TrimEnd(
+                        Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).FullName;
+                allowed.Add(toolkitRoot);
+            }
+
+            FsGuard.Configure(allowed);
+
             Log.Info(Cat.Config, "workspace=" + workspaceRoot +
                                  (gamesRoot.Length > 0 ? ", gamesRoot=" + gamesRoot : ", gamesRoot=(unset)"));
+            Log.Info(Cat.Config, "readable roots: " + FsGuard.Describe());
             return context;
         }
 

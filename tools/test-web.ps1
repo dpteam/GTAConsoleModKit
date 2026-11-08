@@ -171,6 +171,33 @@ Check "delete and add folder guard the project root and traversal" {
     $root -and $escape
 }
 
+Check "fs browser lists roots and folders, refuses outside paths" {
+    $roots = Get-Json "/api/fs"
+    $inside = Get-Json ("/api/fs?path=" + [uri]::EscapeDataString($roots.roots[0].path))
+    $denied = $false
+    try { Get-Json ("/api/fs?path=" + [uri]::EscapeDataString('C:\Windows')) | Out-Null }
+    catch { $denied = $_.Exception.Response.StatusCode.value__ -eq 403 }
+    $roots.ok -eq $true -and $roots.roots.Count -ge 1 -and $inside.ok -eq $true -and $denied
+}
+
+Check "a copied read-only file becomes writable" {
+    $ws = (Get-Json "/api/status").workspace
+    $source = Join-Path $ws ("ci-ro-" + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    New-Item -ItemType Directory -Path $source -Force | Out-Null
+    $file = Join-Path $source 'packed.idx'
+    Set-Content -Path $file -Value 'read only' -NoNewline
+    (Get-Item $file).Attributes = 'ReadOnly'
+
+    $r = Post-Json ("/api/projects/" + $script:projectId + "/folder") @{ path = $source; as = 'ro' }
+    $copied = Join-Path (Join-Path $ws ($script:projectId + '\files')) 'ro\packed.idx'
+    $writable = (Test-Path $copied) -and -not ((Get-Item $copied).Attributes -band [IO.FileAttributes]::ReadOnly)
+
+    # and the folder with a read-only file must delete completely
+    $del = Post-Json ("/api/projects/" + $script:projectId + "/delete") @{ path = 'ro' }
+    Remove-Item -Recurse -Force $source -ErrorAction SilentlyContinue
+    $r.ok -eq $true -and $writable -and $del.ok -eq $true
+}
+
 # ---------------------------------------------------------------- sessions
 $clientId = $null
 

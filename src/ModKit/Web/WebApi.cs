@@ -27,6 +27,7 @@ namespace ModKit.Web
                 if (path == "/api/logs") return Logs(request);
                 if (path == "/api/jobs") return HttpResponse.Json(Json.O("ok", true, "jobs", Jobs(ctx, request)));
                 if (path == "/api/identify") return Identify(ctx, request);
+                if (path == "/api/fs") return Browse(request);
                 if (path == "/api/ops") return RunOperation(ctx, request);
 
                 if (path.StartsWith("/api/jobs/", StringComparison.OrdinalIgnoreCase))
@@ -95,6 +96,66 @@ namespace ModKit.Web
                 "gamesRoot", ctx.GamesRoot,
                 "logFile", Log.CurrentFile ?? "",
                 "jobs", (long)ctx.Pipeline.Recent(100).Count));
+        }
+
+        /// <summary>
+        /// Server-side folder browser for the web UI. A browser on another machine
+        /// cannot hand the server its own paths (a mapped drive on the client does
+        /// not exist for the server), so the UI browses what the server can see.
+        ///
+        /// Response: roots + the folders of the requested directory + the parent
+        /// (null when the parent is outside every allowed root).
+        /// </summary>
+        private static HttpResponse Browse(HttpRequest request)
+        {
+            var roots = new List<object>();
+            foreach (string root in FsGuard.Roots)
+            {
+                string name = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar));
+                if (string.IsNullOrEmpty(name)) name = root;
+                roots.Add(Json.O("path", root, "name", name));
+            }
+
+            string requested = ParseString(request, "path", "");
+            if (string.IsNullOrEmpty(requested))
+                return HttpResponse.Json(Json.O("ok", true, "path", "", "parent", null,
+                    "roots", roots, "folders", new List<object>(), "files", 0L));
+
+            string target = FsGuard.Allow(requested);
+            if (target == null)
+                return HttpResponse.Error(403, "not inside the allowed roots. Allowed: " + FsGuard.Describe());
+            if (!Directory.Exists(target))
+                return HttpResponse.Error(404, "no such folder: " + requested);
+
+            var names = new List<string>(Directory.GetDirectories(target));
+            names.Sort(delegate(string a, string b)
+            {
+                return string.Compare(Path.GetFileName(a), Path.GetFileName(b), StringComparison.OrdinalIgnoreCase);
+            });
+
+            var folders = new List<object>();
+            foreach (string directory in names)
+            {
+                long files = 0, subfolders = 0;
+                try
+                {
+                    files = Directory.GetFiles(directory).Length;
+                    subfolders = Directory.GetDirectories(directory).Length;
+                }
+                catch (Exception) { }
+                folders.Add(Json.O("name", Path.GetFileName(directory), "path", directory,
+                    "files", files, "folders", subfolders));
+            }
+
+            string parent = null;
+            DirectoryInfo up = Directory.GetParent(target);
+            if (up != null) parent = FsGuard.Allow(up.FullName);
+
+            long here = 0;
+            try { here = Directory.GetFiles(target).Length; } catch (Exception) { }
+
+            return HttpResponse.Json(Json.O("ok", true, "path", target, "parent", parent,
+                "roots", roots, "folders", folders, "files", here));
         }
 
         private static HttpResponse Logs(HttpRequest request)
@@ -245,7 +306,8 @@ namespace ModKit.Web
                 string path = Json.GetString(body, "path", "");
                 string asName = Json.GetString(body, "as", "");
                 string source = ResolveAnyPath(ctx, project, path);
-                if (source == null) return HttpResponse.Error(403, "path outside the allowed roots");
+                if (source == null)
+                    return HttpResponse.Error(403, "not inside the allowed roots. Allowed: " + FsGuard.Describe());
 
                 // a relative path is normally project-relative, but "add a folder from
                 // the game dumps" is the common case, so fall back to gamesRoot
@@ -300,8 +362,8 @@ namespace ModKit.Web
                     return HttpResponse.Error(400, "refusing to delete the project root");
 
                 bool wasFolder = Directory.Exists(target);
-                if (wasFolder) Directory.Delete(target, true);
-                else if (File.Exists(target)) File.Delete(target);
+                if (wasFolder) Util.DeleteTree(target);
+                else if (File.Exists(target)) Util.DeleteTree(target);
                 else return HttpResponse.Error(404, "no such file or folder: " + relative);
 
                 Project.OpRecord op = project.AddOp(Json.GetString(body, "user", project.Owner),
@@ -776,31 +838,40 @@ namespace ModKit.Web
         }
 
         /// <summary>
-        /// Absolute paths are only accepted inside the workspace or the configured
-        /// games root. Anything else is treated as relative to the project files.
+        /// Absolute paths are only accepted inside the allowed roots (workspace,
+        /// gamesRoot and whatever <c>workspace.roots</c> adds). A relative path is
+        /// project-relative first, then gamesRoot, then any other root - so
+        /// "refs/temp/VCS" or "extracted/LCS" work without typing a drive letter.
         /// </summary>
         private static string ResolveAnyPath(ModKitContext ctx, Project project, string path)
         {
             if (string.IsNullOrEmpty(path)) return null;
-            if (Path.IsPathRooted(path))
+            if (Path.IsPathRooted(path)) return FsGuard.Allow(path);
+
+            if (project != null)
             {
-                string full = Path.GetFullPath(path);
-                if (Inside(full, ctx.WorkspaceRoot) || Inside(full, ctx.GamesRoot)) return full;
-                return null;
+                string inside = Util.SafeCombine(project.FilesPath, path);
+                if (inside != null && (File.Exists(inside) || Directory.Exists(inside))) return inside;
             }
+            if (!string.IsNullOrEmpty(ctx.GamesRoot))
+            {
+                string fromGames = Util.SafeCombine(ctx.GamesRoot, path);
+                if (fromGames != null && (File.Exists(fromGames) || Directory.Exists(fromGames))) return fromGames;
+            }
+            foreach (string root in FsGuard.Roots)
+            {
+                string fromRoot = Util.SafeCombine(root, path);
+                if (fromRoot != null && (File.Exists(fromRoot) || Directory.Exists(fromRoot))) return fromRoot;
+            }
+
+            // nothing exists yet: keep the old behaviour and let the caller say "no such file"
             if (project != null) return Util.SafeCombine(project.FilesPath, path);
-            if (!string.IsNullOrEmpty(ctx.GamesRoot)) return Util.SafeCombine(ctx.GamesRoot, path);
             return null;
         }
 
         private static string ResolveOutputPath(ModKitContext ctx, Project project, string path)
         {
-            if (Path.IsPathRooted(path))
-            {
-                string full = Path.GetFullPath(path);
-                if (Inside(full, ctx.WorkspaceRoot) || Inside(full, ctx.GamesRoot)) return full;
-                return null;
-            }
+            if (Path.IsPathRooted(path)) return FsGuard.Allow(path);
             if (project != null) return Util.SafeCombine(project.ExportPath, path);
             if (!string.IsNullOrEmpty(ctx.GamesRoot)) return Util.SafeCombine(ctx.GamesRoot, path);
             return null;
