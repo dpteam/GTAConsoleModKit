@@ -149,9 +149,14 @@ public/                             веб-морда (HTML/CSS/ES5)
 data/modelnames.lcs.txt             hash → имя модели (LCS)
 data/modelnames.vcs.txt             hash → имя модели (VCS)
 tools/build_modelnames.py           пересборка этих таблиц из дампов g3DTZ
+tools/import_games.py               разбор архивов с образами (refs/GAMES)
+tools/prune_games.py                отпечатки данных, удаление дублей и мусора
 tools/ci-test.ps1                   всё сразу: сборка, тесты, отчёт
 tools/test-formats.ps1              тест форматов на реальных данных (если они есть)
 tools/test-web.ps1                  тест HTTP API и статики
+docs/PIPELINE.md                    от текстуры до играбельного образа (с цифрами)
+docs/DATA.md                        как устроены данные в refs/ и как их пересобрать
+docs/GAME_IMAGES.md                 какие образы идентичны (снимок отчёта)
 docs/                               архитектура, форматы, логи, сессии, API, роадмап
 ```
 
