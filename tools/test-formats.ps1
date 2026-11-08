@@ -340,6 +340,54 @@ if (Test-Path $dtz) {
     Skip "LCS format tests" "refs\GAMES\extracted\LCS not found"
 }
 
+# --------------------------------------------------- clean VCS (imported image)
+$vcsClean = Join-Path $Games 'vice_city_stories_usa\PSP_GAME\USRDIR\RUNDATA'
+$vcsDtz = Join-Path $vcsClean 'PSP\GAME.DTZ'
+$vcsImg = Join-Path $vcsClean 'GTA3PSP.IMG'
+
+if (Test-Path $vcsDtz) {
+    Write-Host "  (clean VCS USA dump found)" -ForegroundColor DarkGray
+
+    Check "dtz-inspect indexes the VCS streaming table" {
+        $out = Run @('dtz-inspect', $vcsDtz)
+        ($out -match 'VCS PSP') -and ($out -match 'streamedModels: 645') -and
+            ($out -match 'streamedTextures: 814')
+    }
+
+    Check "dtz-dir works for VCS and names resolve" {
+        $dir = Join-Path $temp 'vcs.dir'
+        $log = Run @('dtz-dir', $vcsDtz, $dir)
+        if (-not (Test-Path $dir)) { return $false }
+        $listing = Run @('img-list', $vcsImg, $dir)
+        $unresolved = ($listing | Select-String 'HASH_').Count
+        ($log -match '645 mdl') -and ($log -match '814 tex') -and
+            ($listing -match 'PLR\.MDL') -and ($unresolved -eq 0)
+    }
+
+    Check "VCS entries match the chunk headers" {
+        # every DIR entry must point at a chunk whose fileEnd rounds up to its size
+        $dir = Join-Path $temp 'vcs.dir'
+        $bytes = [System.IO.File]::ReadAllBytes($dir)
+        $img = [System.IO.File]::ReadAllBytes($vcsImg)
+        $checked = 0
+        $bad = 0
+        for ($i = 0; $i -lt ($bytes.Length / 32) -and $checked -lt 200; $i++) {
+            $offset = [BitConverter]::ToUInt32($bytes, $i * 32)
+            $size = [BitConverter]::ToUInt32($bytes, $i * 32 + 4)
+            if ($size -eq 0) { continue }
+            $at = $offset * 2048
+            if ($at + 12 -gt $img.Length) { continue }
+            $fileEnd = [BitConverter]::ToUInt32($img, $at + 8)
+            $sectors = [math]::Ceiling($fileEnd / 2048.0)
+            $checked++
+            if ($sectors -ne $size) { $bad++ }
+        }
+        ($checked -ge 100) -and ($bad -eq 0)
+    }
+} else {
+    Skip "VCS streaming tests" "refs\GAMES\extracted\vice_city_stories_usa not found"
+}
+
 # ------------------------------------------------------------------ cleanup
 Remove-Item -Recurse -Force $temp -ErrorAction SilentlyContinue
 

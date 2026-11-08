@@ -53,7 +53,26 @@ namespace ModKit.Formats
         public int StreamingModelCount { get; private set; }
         public int StreamingTextureCount { get; private set; }
 
+        /// <summary>
+        /// The two games keep the streaming record differently, verified on retail
+        /// images: LCS stores [next][prev][status][flags][nextModelOnCd][pos][size],
+        /// VCS stores [pos][size][...] and its array starts 12 bytes after the
+        /// pointer. Both records are 20 bytes.
+        /// </summary>
+        private bool _vcsLayout;
+
+        private int PosField { get { return _vcsLayout ? 0 : 12; } }
+        private int SizeField { get { return _vcsLayout ? 4 : 16; } }
+        private int ArrayHeader { get { return _vcsLayout ? 12 : 4; } }
+
         private ModelNameDatabase _names;
+
+        /// <summary>
+        /// Folder with data/modelnames.*.txt. Set once at startup so the format
+        /// layer can pick the right name table after it has detected the game -
+        /// previously the caller had to know the game before parsing.
+        /// </summary>
+        public static string DataDirectory;
 
         public static DtzImage Load(string path, ModelNameDatabase names)
         {
@@ -86,6 +105,15 @@ namespace ModKit.Formats
                 throw new InvalidDataException("unexpected chunk ident '" + image.Header.Ident +
                                                "', expected GTAG");
             image.Game = image.DetectGame();
+            image._vcsLayout = image.Game == GameKind.VcsPsp;
+            if (image._names == null && !string.IsNullOrEmpty(DataDirectory))
+            {
+                string file = image.Game == GameKind.VcsPsp
+                    ? "modelnames.vcs.txt"
+                    : "modelnames.lcs.txt";
+                string dbPath = Path.Combine(DataDirectory, file);
+                if (File.Exists(dbPath)) image._names = ModelNameDatabase.Load(dbPath);
+            }
             image.Index();
             return image;
         }
@@ -105,19 +133,18 @@ namespace ModKit.Formats
                 return GameKind.Unknown;
             }
 
-            if (count >= 3900 && count <= 4600) return GameKind.LcsPsp;
-
-            // VCS keeps the streaming table behind pointers instead of fixed arrays.
             int texOffset = (int)Util.U32(Data, streaming + 8);
             int colOffset = (int)Util.U32(Data, streaming + 12);
             int anmOffset = (int)Util.U32(Data, streaming + 16);
             int numInfos = (int)Util.U32(Data, streaming + 20);
             int array = (int)Util.U32(Data, streaming + 152);
 
-            bool vcsLayout = texOffset > 0 && colOffset > texOffset && anmOffset > colOffset &&
-                             numInfos > anmOffset && numInfos < 200000 &&
-                             array > 0 && array < Data.Length;
-            if (vcsLayout) return GameKind.VcsPsp;
+            bool dynamicTable = texOffset > 0 && colOffset > texOffset && anmOffset > colOffset &&
+                                numInfos > anmOffset && numInfos < 200000 &&
+                                array > 0 && array < Data.Length;
+
+            if (count >= 3900 && count <= 4600) return GameKind.LcsPsp;
+            if (dynamicTable) return GameKind.VcsPsp;
 
             return GameKind.Unknown;
         }
@@ -203,27 +230,30 @@ namespace ModKit.Formats
         {
             int at = arrayOffsetBytes + index * StreamingInfoSize;
             if (at + StreamingInfoSize > Data.Length) return null;
-            // next(4) prev(4) status(1) flags(1) nextModelOnCd(2) pos(4) size(4)
             return new RawStream
             {
-                Offset = Util.U32(Data, at + 12),
-                Size = Util.U32(Data, at + 16)
+                Offset = Util.U32(Data, at + PosField),
+                Size = Util.U32(Data, at + SizeField)
             };
         }
 
         private int ModelArray
         {
-            get { return StreamingBase + 4; }
+            get
+            {
+                if (!_vcsLayout)
+                {
+                    // LCS keeps the arrays inline, right after the leading field
+                    return StreamingBase + ArrayHeader;
+                }
+                int array = (int)Util.U32(Data, StreamingBase + 152);
+                return array + ArrayHeader;
+            }
         }
 
         private int TextureArray
         {
-            get
-            {
-                if (Game == GameKind.LcsPsp) return StreamingBase + 4 + 4900 * StreamingInfoSize;
-                int texOffset = (int)Util.U32(Data, StreamingBase + 8);
-                return StreamingBase + 4 + texOffset * StreamingInfoSize;
-            }
+            get { return ModelArray + StreamingModelCount * StreamingInfoSize; }
         }
 
         /// <summary>Builds the .DIR the game would use for the main IMG.</summary>
@@ -231,14 +261,9 @@ namespace ModKit.Formats
         {
             var result = new List<StreamingEntry>();
 
-            if (Game == GameKind.VcsPsp)
+            if (Game != GameKind.LcsPsp && Game != GameKind.VcsPsp)
                 throw new NotSupportedException(
-                    "VCS streaming table is not decoded yet (see docs/FORMATS.md §8). " +
-                    "Use img-list/img-extract without a .DIR: it scans the IMG chunks instead.");
-
-            if (Game != GameKind.LcsPsp)
-                throw new NotSupportedException(
-                    "this GAME.DAT is '" + GameLabel + "'; only LCS PSP is indexed so far");
+                    "this GAME.DAT is '" + GameLabel + "'; only LCS/VCS PSP are indexed");
 
             for (int i = 0; i < StreamingModelCount; i++)
             {
@@ -372,8 +397,8 @@ namespace ModKit.Formats
             int at = array + index * StreamingInfoSize;
             if (at + StreamingInfoSize > Data.Length) return false;
 
-            Util.PutU32(Data, at + 12, (uint)posSectors);
-            Util.PutU32(Data, at + 16, (uint)sizeSectors);
+            Util.PutU32(Data, at + PosField, (uint)posSectors);
+            Util.PutU32(Data, at + SizeField, (uint)sizeSectors);
             return true;
         }
 
@@ -409,6 +434,12 @@ namespace ModKit.Formats
         public void SaveDat(string path)
         {
             Util.WriteAllBytesAtomic(path, Data);
+        }
+
+        /// <summary>Replaces the name table (used when the caller knows better).</summary>
+        public void SetNames(ModelNameDatabase names)
+        {
+            if (names != null && names.Count > 0) _names = names;
         }
 
         public void SaveDtz(string path)

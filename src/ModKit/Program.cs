@@ -102,6 +102,7 @@ namespace ModKit
 
             context.PublicDirectory = Path.Combine(baseDirectory, "public");
             context.DataDirectory = Path.Combine(baseDirectory, "data");
+            ModKit.Formats.DtzImage.DataDirectory = context.DataDirectory;
 
             string workspaceRoot = context.Config.Get("workspace.root", "workspace");
             if (!Path.IsPathRooted(workspaceRoot))

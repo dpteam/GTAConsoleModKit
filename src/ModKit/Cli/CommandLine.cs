@@ -115,8 +115,9 @@ DPT.PSP GTA Modding Kit - headless commands
   dtz-inspect <GAME.DTZ|GAME.DAT>      streaming table summary
   dtz-dat <GAME.DTZ> [out.dat]         inflate to GAME.DAT
   dtz-dtz <GAME.DAT> [out.dtz]         recompress to GAME.DTZ
-  dtz-dir <GAME.DTZ> [out.dir] [--vcs] export the .DIR for the matching IMG
-  dtz-models <GAME.DTZ> [--vcs] [--limit N]
+  dtz-dir <GAME.DTZ> [out.dir]           export the .DIR for the matching IMG
+                                         (game and name table are auto-detected)
+  dtz-models <GAME.DTZ> [--limit N]
   chk-list <file.chk|.xtx>             list textures
   chk-export <file.chk> [folder]       export every texture as PNG
   chk-replace <chk> <png> [i] [out]    put a PNG back into a texture (mip + palette)
@@ -311,8 +312,9 @@ Notes
 
         private static int DtzInspect(ModKitContext ctx, List<string> args)
         {
-            if (args.Count < 1) return Usage("dtz-inspect <GAME.DTZ>");
-            Operations.Outcome outcome = Operations.DtzInspect(args[0], ctx.ModelNameFile("LCS"));
+            string names = TakeOption(args, "--names");
+            if (args.Count < 1) return Usage("dtz-inspect <GAME.DTZ> [--names file]");
+            Operations.Outcome outcome = Operations.DtzInspect(args[0], names);
             PrintOutcome(outcome);
             return outcome.Ok ? 0 : 1;
         }
@@ -333,17 +335,17 @@ Notes
 
         private static int DtzDir(ModKitContext ctx, List<string> args)
         {
-            bool vcs = args.Remove("--vcs");
-            if (args.Count < 1) return Usage("dtz-dir <GAME.DTZ> [out.dir] [--vcs]");
+            string names = TakeOption(args, "--names");
+            if (args.Count < 1) return Usage("dtz-dir <GAME.DTZ> [out.dir] [--names file]");
             Operations.Outcome outcome = Operations.DtzExportDir(args[0],
-                args.Count > 1 ? args[1] : null, ctx.ModelNameFile(vcs ? "VCS" : "LCS"));
+                args.Count > 1 ? args[1] : null, names);
             PrintOutcome(outcome);
             return outcome.Ok ? 0 : 1;
         }
 
         private static int DtzModels(ModKitContext ctx, List<string> args)
         {
-            bool vcs = args.Remove("--vcs");
+            string names = TakeOption(args, "--names");
             int limit = 50;
             for (int i = args.Count - 1; i >= 0; i--)
             {
@@ -354,8 +356,8 @@ Notes
                     args.RemoveAt(i);
                 }
             }
-            if (args.Count < 1) return Usage("dtz-models <GAME.DTZ> [--vcs] [--limit N]");
-            Operations.Outcome outcome = Operations.DtzModels(args[0], ctx.ModelNameFile(vcs ? "VCS" : "LCS"), limit);
+            if (args.Count < 1) return Usage("dtz-models <GAME.DTZ> [--names file] [--limit N]");
+            Operations.Outcome outcome = Operations.DtzModels(args[0], names, limit);
             if (!outcome.Ok)
             {
                 PrintOutcome(outcome);
@@ -519,6 +521,22 @@ Notes
             {
                 if (percent % 10 == 0) Console.Write("\r  " + percent.ToString(CultureInfo.InvariantCulture) + "% ");
             };
+        }
+
+        /// <summary>Removes "--name value" from the argument list and returns the value.</summary>
+        private static string TakeOption(List<string> args, string option)
+        {
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (args[i] == option && i + 1 < args.Count)
+                {
+                    string value = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                    return value;
+                }
+            }
+            return null;
         }
 
         private static int Usage(string text)

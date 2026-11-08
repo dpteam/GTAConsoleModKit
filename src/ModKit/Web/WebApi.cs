@@ -312,7 +312,7 @@ namespace ModKit.Web
                 {
                     try
                     {
-                        DtzImage image = DtzImage.Load(target, ModelNameDatabase.Load(ctx.ModelNameFile("LCS")));
+                        DtzImage image = DtzImage.Load(target, null);
                         payload["models"] = image.DescribeModels(200);
                         payload["game"] = image.GameLabel;
                     }
@@ -596,8 +596,7 @@ namespace ModKit.Web
                             Json.GetString(body, "extension", ""), progress);
                         break;
                     case "dtz-inspect":
-                        outcome = Operations.DtzInspect(resolvedSource, ctx.ModelNameFile(
-                            project != null && project.Game == "VCS" ? "VCS" : "LCS"));
+                        outcome = Operations.DtzInspect(resolvedSource, "");
                         break;
                     case "dtz-dat":
                         outcome = Operations.DtzExportDat(resolvedSource, resolvedTarget);
@@ -606,12 +605,10 @@ namespace ModKit.Web
                         outcome = Operations.DtzExportDtz(resolvedSource, resolvedTarget);
                         break;
                     case "dtz-dir":
-                        outcome = Operations.DtzExportDir(resolvedSource, resolvedTarget,
-                            ctx.ModelNameFile(project != null && project.Game == "VCS" ? "VCS" : "LCS"));
+                        outcome = Operations.DtzExportDir(resolvedSource, resolvedTarget, "");
                         break;
                     case "dtz-models":
-                        outcome = Operations.DtzModels(resolvedSource,
-                            ctx.ModelNameFile(project != null && project.Game == "VCS" ? "VCS" : "LCS"), 500);
+                        outcome = Operations.DtzModels(resolvedSource, "", 500);
                         break;
                     case "chk-list":
                         outcome = Operations.ChkList(resolvedSource);

@@ -19,7 +19,7 @@ ModKit.exe identify LOADSC0.CHK
 | `.IMG` (Stories, `.DIR` + сектора) | да | да (замена на месте, перенос выросших + правка стриминга) |
 | `.IMG` (GTA III/VC `.DIR`, SA `VER2`) | да | да |
 | `GAME.DTZ` ↔ `GAME.DAT` | да | да (zlib) |
-| Таблица стриминга `GAME.DAT` → `.DIR` | да (LCS PSP проверено на диске) | экспорт DIR |
+| Таблица стриминга `GAME.DAT` → `.DIR` | да, LCS и VCS (сверено с чанками IMG) | экспорт DIR |
 | `.LVZ` (zlib + чанк `WRLD`) | да | пересжатие |
 | `.CHK` / `.XTX` (текстуры) | да: список, палитра, swizzle, mip, PNG | да: PNG → текстура (pal4/pal8) |
 | `.MDL`, `.ANIM` (чанки `ldm`/`anim`) | заголовок и границы | — |
