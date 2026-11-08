@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPT.PSP GTA Modding Kit</title>
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body data-theme="light">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">DPT<span class="logo-dot">.</span>PSP</span>
+    <span class="brand-text">GTA Modding Kit</span>
+    <span class="ver" id="ver">v0.1.0</span>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="dash"><i>▤</i><span data-i18n="nav.projects">Проекты</span></button>
+    <button class="tab" data-view="logs"><i>⌸</i><span data-i18n="nav.logs">Лог</span></button>
+    <button class="tab" data-view="about"><i>ⓘ</i><span data-i18n="nav.about">О наборе</span></button>
+  </nav>
+
+  <div class="top-tools">
+    <select id="lang" title="Language"></select>
+    <button id="theme" class="icon" title="Тема">◐</button>
+    <button id="sound" class="icon on" title="Звук">♪</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============================ projects ============================ -->
+  <section class="view" id="view-dash">
+    <div class="stat-grid">
+      <div class="stat">
+        <div class="stat-icon">◈</div>
+        <div class="stat-body">
+          <div class="stat-label" data-i18n="stat.projects">Проектов</div>
+          <div class="stat-value" id="stat-projects">0</div>
+          <div class="stat-sub" id="stat-projects-sub"></div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-icon">⌁</div>
+        <div class="stat-body">
+          <div class="stat-label" data-i18n="stat.online">Онлайн</div>
+          <div class="stat-value" id="stat-online">0</div>
+          <div class="stat-sub" data-i18n="stat.online-sub">в сессиях</div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-icon">⚙</div>
+        <div class="stat-body">
+          <div class="stat-label" data-i18n="stat.jobs">Задания</div>
+          <div class="stat-value" id="stat-jobs">0</div>
+          <div class="stat-sub" id="stat-jobs-sub"></div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-icon">☰</div>
+        <div class="stat-body">
+          <div class="stat-label" data-i18n="stat.uptime">Аптайм</div>
+          <div class="stat-value" id="stat-uptime">—</div>
+          <div class="stat-sub" id="stat-port"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns">
+      <div class="panel grow">
+        <div class="panel-head">
+          <h2 data-i18n="projects.title">Проекты</h2>
+          <input id="project-filter" class="search" type="search" data-i18n-ph="projects.search" placeholder="Поиск по названию или коду">
+        </div>
+        <div class="panel-body" id="project-list">
+          <div class="empty" data-i18n="projects.empty">Пока нет проектов. Создайте первый — это одна папка в workspace.</div>
+        </div>
+      </div>
+
+      <div class="panel side">
+        <div class="panel-head"><h2 data-i18n="projects.new">Новый проект</h2></div>
+        <div class="panel-body">
+          <label class="field">
+            <span data-i18n="projects.name">Название</span>
+            <input id="new-name" type="text" data-i18n-ph="projects.name-ph" placeholder="Например: LCS RUS patch">
+          </label>
+          <label class="field">
+            <span data-i18n="projects.game">Игра</span>
+            <select id="new-game">
+              <option value="LCS">GTA Liberty City Stories</option>
+              <option value="VCS">GTA Vice City Stories</option>
+              <option value="LCS/VCS">LCS + VCS</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="projects.author">Автор</span>
+            <input id="new-owner" type="text" placeholder="nickname">
+          </label>
+          <label class="field">
+            <span data-i18n="projects.desc">Описание</span>
+            <textarea id="new-desc" rows="3" data-i18n-ph="projects.desc-ph" placeholder="Что делаем"></textarea>
+          </label>
+          <button class="btn primary block" id="create-project" data-i18n="projects.create">Создать проект</button>
+          <p class="hint" data-i18n="projects.hint">Каждому проекту выдаётся код сессии: по нему к работе подключается второй человек.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2 data-i18n="jobs.title">Задания</h2></div>
+      <div class="panel-body" id="job-list">
+        <div class="empty" data-i18n="jobs.empty">Заданий ещё не было.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ project ============================ -->
+  <section class="view hidden" id="view-project">
+    <div class="crumb">
+      <button class="link" id="back-dash">← <span data-i18n="nav.projects">Проекты</span></button>
+      <span class="crumb-name" id="proj-title"></span>
+      <span class="pill" id="proj-game"></span>
+      <span class="pill code" id="proj-code" title="session code"></span>
+      <span class="pill ok hidden" id="proj-online"></span>
+    </div>
+
+    <div class="proj-grid">
+      <aside class="panel files-panel">
+        <div class="panel-head">
+          <h2 data-i18n="files.title">Файлы</h2>
+          <label class="upload">
+            <input type="file" id="file-input" multiple>
+            <span data-i18n="files.add">+ Добавить</span>
+          </label>
+        </div>
+        <div class="panel-body scroll" id="file-list">
+          <div class="empty" data-i18n="files.empty">Пусто. Загрузите файлы или распакуйте ISO в папку проекта.</div>
+        </div>
+      </aside>
+
+      <section class="panel grow">
+        <div class="panel-head">
+          <h2 id="inspector-title" data-i18n="inspect.title">Инспектор</h2>
+          <span class="muted" id="inspector-path"></span>
+        </div>
+        <div class="panel-body scroll" id="inspector">
+          <div class="empty" data-i18n="inspect.empty">Выберите файл слева, чтобы увидеть формат, текстуры, строки или модели.</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="tabs2" id="proj-tabs">
+      <button class="tab2 active" data-ptab="tools" data-i18n="ptab.tools">Операции</button>
+      <button class="tab2" data-ptab="session" data-i18n="ptab.session">Сессия</button>
+      <button class="tab2" data-ptab="log" data-i18n="ptab.log">Журнал</button>
+    </div>
+
+    <div class="ptab" id="ptab-tools">
+      <div class="columns">
+        <div class="panel grow">
+          <div class="panel-head"><h2 data-i18n="ops.title">Быстрые операции</h2></div>
+          <div class="panel-body">
+            <div class="op-grid" id="op-grid"></div>
+            <p class="hint" data-i18n="ops.hint">Пути можно указывать абсолютные (внутри workspace и gamesRoot) или относительные — тогда они считаются от папки проекта.</p>
+          </div>
+        </div>
+        <div class="panel side">
+          <div class="panel-head"><h2 data-i18n="ops.identify">Определить файл</h2></div>
+          <div class="panel-body">
+            <label class="field">
+              <span data-i18n="ops.path">Путь</span>
+              <input id="identify-path" type="text" placeholder="files/PSP_GAME/USRDIR/TXD/LOADSC0.CHK">
+            </label>
+            <button class="btn block" id="identify-run" data-i18n="ops.identify-run">Определить</button>
+            <pre class="mono small" id="identify-out"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ptab hidden" id="ptab-session">
+      <div class="columns">
+        <div class="panel grow">
+          <div class="panel-head">
+            <h2 data-i18n="session.title">Совместная сессия</h2>
+            <span class="muted" data-i18n="session.sub">код проекта соединяет двух людей в одну работу</span>
+          </div>
+          <div class="panel-body">
+            <div class="session-row">
+              <label class="field">
+                <span data-i18n="session.nick">Ник</span>
+                <input id="session-nick" type="text" placeholder="nickname">
+              </label>
+              <button class="btn primary" id="session-join" data-i18n="session.join">Подключиться</button>
+              <button class="btn" id="session-leave" data-i18n="session.leave">Выйти</button>
+            </div>
+            <div class="members" id="session-members"></div>
+            <h3 data-i18n="session.note">Заметка в журнал</h3>
+            <div class="session-row">
+              <input id="note-text" type="text" data-i18n-ph="session.note-ph" placeholder="Что сделано / что дальше">
+              <button class="btn" id="note-send" data-i18n="session.send">Добавить</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel side">
+          <div class="panel-head"><h2 data-i18n="session.code">Код сессии</h2></div>
+          <div class="panel-body center">
+            <div class="session-code" id="session-code">————</div>
+            <p class="hint" data-i18n="session.code-hint">Передайте код коллеге: он открывает проект с этого же сервера и подключается к живой сессии.</p>
+            <div class="kv"><span data-i18n="session.mode">Режим</span><b id="session-mode">offline</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ptab hidden" id="ptab-log">
+      <div class="panel">
+        <div class="panel-head"><h2 data-i18n="log.title">Журнал операций</h2></div>
+        <div class="panel-body scroll tall" id="proj-ops"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== logs ============================== -->
+  <section class="view hidden" id="view-logs">
+    <div class="panel">
+      <div class="panel-head">
+        <h2 data-i18n="logs.title">Лог сервера</h2>
+        <span class="muted" id="logs-file"></span>
+        <label class="check"><input type="checkbox" id="logs-follow" checked> <span data-i18n="logs.follow">Следить</span></label>
+      </div>
+      <div class="panel-body"><pre class="logbox" id="logbox"></pre></div>
+    </div>
+  </section>
+
+  <!-- ============================== about ============================= -->
+  <section class="view hidden" id="view-about">
+    <div class="columns">
+      <div class="panel grow">
+        <div class="panel-head"><h2 data-i18n="about.title">DPT.PSP GTA Modding Kit</h2></div>
+        <div class="panel-body about" id="about-body"></div>
+      </div>
+      <div class="panel side">
+        <div class="panel-head"><h2 data-i18n="about.formats">Форматы</h2></div>
+        <div class="panel-body" id="format-table"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toasts"></div>
+
+<div id="toast-template" class="hidden"></div>
+
+<script src="assets/js/i18n.js"></script>
+<script src="assets/js/sound.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
