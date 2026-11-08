@@ -540,6 +540,13 @@ namespace ModKit.Web
                         outcome = Operations.ImgReplace(resolvedSource, extra,
                             Json.GetString(body, "entry", ""), resolvedTarget);
                         break;
+                    case "img-repack":
+                        outcome = Operations.ImgRepackCmd(resolvedSource,
+                            Json.GetString(body, "dat", extra), extra,
+                            Json.GetString(body, "folder", ""), resolvedTarget,
+                            Json.GetString(body, "outDir", ""),
+                            Json.GetString(body, "outDtz", ""), progress);
+                        break;
                     case "img-pack":
                         outcome = Operations.ImgPack(resolvedSource, resolvedTarget, extra,
                             Json.GetString(body, "extension", ""), progress);

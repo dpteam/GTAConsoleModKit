@@ -16,7 +16,7 @@ ModKit.exe identify LOADSC0.CHK
 |---|---|---|
 | `.CSO` / `.ZSO` (сжатый образ PSP) | да | CSO v1 (deflate) |
 | `.ISO` (ISO 9660 level 2) | да | да, сборка с нуля |
-| `.IMG` (Stories, `.DIR` + сектора) | да | да (IMG + DIR) |
+| `.IMG` (Stories, `.DIR` + сектора) | да | да (замена на месте, перенос выросших + правка стриминга) |
 | `.IMG` (GTA III/VC `.DIR`, SA `VER2`) | да | да |
 | `GAME.DTZ` ↔ `GAME.DAT` | да | да (zlib) |
 | Таблица стриминга `GAME.DAT` → `.DIR` | да (LCS PSP проверено на диске) | экспорт DIR |
@@ -66,6 +66,7 @@ ModKit.exe img-list <image.img> [dir]
 ModKit.exe img-extract <img> [folder] [--dir <dir>]
 ModKit.exe img-replace <img> <entry> <file> [--dir <dir>]
 ModKit.exe img-pack <folder> [out.img] [--ext .mdl]
+ModKit.exe img-repack <img> <GAME.DTZ> [--folder dir] [--out new.img] [--out-dtz new.dtz]
 ModKit.exe dtz-inspect <GAME.DTZ|GAME.DAT>
 ModKit.exe dtz-dat <GAME.DTZ> [out.dat]
 ModKit.exe dtz-dtz <GAME.DAT> [out.dtz]

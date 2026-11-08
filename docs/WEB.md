@@ -65,7 +65,7 @@
 ```
 
 Имена операций: `cso-to-iso`, `iso-to-cso`, `iso-extract`, `iso-build`, `img-list`,
-`img-extract`, `img-replace`, `img-pack`, `dtz-inspect`, `dtz-dat`, `dtz-dtz`, `dtz-dir`, `dtz-models`,
+`img-extract`, `img-replace`, `img-pack`, `img-repack`, `dtz-inspect`, `dtz-dat`, `dtz-dtz`, `dtz-dir`, `dtz-models`,
 `chk-list`, `chk-export`, `gxt-dump`, `vag-to-wav`, `wav-to-vag`.
 
 `source` обязателен. `target` для операций, которые пишут результат, — абсолютный

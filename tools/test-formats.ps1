@@ -213,6 +213,51 @@ if (Test-Path $dtz) {
     }
 
     if (Test-Path $chk) {
+        Check "img-repack keeps the image byte identical when nothing changed" {
+            $outImg = Join-Path $temp 'same.img'
+            $outDir = Join-Path $temp 'same.dir'
+            $outDtz = Join-Path $temp 'same.dtz'
+            $log = Run @('img-repack', $img, $dtz, '--dir', (Join-Path $temp 'lcs.dir'),
+                '--folder', (Join-Path $temp 'img-out'), '--out', $outImg,
+                '--out-dir', $outDir, '--out-dtz', $outDtz)
+
+            $original = [System.IO.File]::ReadAllBytes($img)
+            $repacked = [System.IO.File]::ReadAllBytes($outImg)
+            $sameImage = $original.Length -eq $repacked.Length
+            if ($sameImage) {
+                for ($i = 0; $i -lt $original.Length; $i++) {
+                    if ($original[$i] -ne $repacked[$i]) { $sameImage = $false; break }
+                }
+            }
+            ($log -match '0 relocated') -and ($log -match '0 slots patched') -and $sameImage
+        }
+
+        Check "img-repack relocates a grown entry and patches the streaming table" {
+            $grow = Join-Path $temp 'grow'
+            New-Item -ItemType Directory -Path $grow -Force | Out-Null
+            $medic = Join-Path $temp 'img-out\MEDIC.MDL'
+            if (-not (Test-Path $medic)) { $medic = Join-Path $temp 'img-out\medic_mdl' }
+            $bytes = [System.IO.File]::ReadAllBytes($medic)
+            $bigger = New-Object byte[] ($bytes.Length + 5000)
+            $bytes.CopyTo($bigger, 0)
+            for ($i = $bytes.Length; $i -lt $bigger.Length; $i++) { $bigger[$i] = 0xAA }
+            [System.IO.File]::WriteAllBytes((Join-Path $grow 'MEDIC.MDL'), $bigger)
+
+            $outImg = Join-Path $temp 'grown.img'
+            $outDir = Join-Path $temp 'grown.dir'
+            $outDtz = Join-Path $temp 'grown.dtz'
+            $log = Run @('img-repack', $img, $dtz, '--dir', (Join-Path $temp 'lcs.dir'),
+                '--folder', $grow, '--out', $outImg, '--out-dir', $outDir, '--out-dtz', $outDtz)
+
+            $movedEntry = (Run @('img-list', $outImg, $outDir)) -match '19614\s+\+\d+\s+MEDIC.MDL'
+            $tableDir = Join-Path $temp 'grown-check.dir'
+            Run @('dtz-dir', $outDtz, $tableDir) | Out-Null
+            $tableAgrees = (Run @('img-list', $outImg, $tableDir)) -match '19614\s+\+\d+\s+MEDIC.MDL'
+            $grew = (Get-Item $outImg).Length -gt (Get-Item $img).Length
+
+            ($log -match '1 relocated') -and ($log -match '1 slots patched') -and $movedEntry -and $tableAgrees -and $grew
+        }
+
         Check "chk-list finds the loading screen texture" {
             $out = Run @('chk-list', $chk)
             $out -match '512x256' -and $out -match 'pal8' -and $out -match '1 textures'

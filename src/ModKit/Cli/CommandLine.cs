@@ -48,6 +48,8 @@ namespace ModKit.Cli
                         return ImgReplace(rest);
                     case "img-pack":
                         return ImgPack(rest);
+                    case "img-repack":
+                        return ImgRepackCommand(rest);
                     case "dtz-inspect":
                         return DtzInspect(ctx, rest);
                     case "dtz-dat":
@@ -105,6 +107,9 @@ DPT.PSP GTA Modding Kit - headless commands
   img-extract <img> [folder] [--dir <dir>]
   img-replace <img> <entry> <file> [--dir <dir>]   put a file back into an entry
   img-pack <folder> [out.img] [--ext .mdl]         build an IMG (+ .DIR) from a folder
+  img-repack <img> <GAME.DTZ> [--folder dir] [--out new.img] [--out-dtz new.dtz]
+                                                   repack an IMG and rewrite the streaming
+                                                   table so entries may change size
   dtz-inspect <GAME.DTZ|GAME.DAT>      streaming table summary
   dtz-dat <GAME.DTZ> [out.dat]         inflate to GAME.DAT
   dtz-dtz <GAME.DAT> [out.dtz]         recompress to GAME.DTZ
@@ -272,6 +277,31 @@ Notes
             if (args.Count < 1) return Usage("img-pack <folder> [out.img] [--dir out.dir] [--ext .mdl]");
             Operations.Outcome outcome = Operations.ImgPack(args[0], args.Count > 1 ? args[1] : null,
                 directory, extension, Progress());
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int ImgRepackCommand(List<string> args)
+        {
+            string directory = null, folder = null, outImg = null, outDir = null, outDtz = null;
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (i + 1 >= args.Count) continue;
+                switch (args[i])
+                {
+                    case "--dir": directory = args[i + 1]; args.RemoveAt(i + 1); args.RemoveAt(i); break;
+                    case "--folder": folder = args[i + 1]; args.RemoveAt(i + 1); args.RemoveAt(i); break;
+                    case "--out": outImg = args[i + 1]; args.RemoveAt(i + 1); args.RemoveAt(i); break;
+                    case "--out-dir": outDir = args[i + 1]; args.RemoveAt(i + 1); args.RemoveAt(i); break;
+                    case "--out-dtz": outDtz = args[i + 1]; args.RemoveAt(i + 1); args.RemoveAt(i); break;
+                }
+            }
+            if (args.Count < 2)
+                return Usage("img-repack <image.img> <GAME.DTZ> [--dir x.dir] [--folder dir] " +
+                             "[--out new.img] [--out-dir new.dir] [--out-dtz new.dtz]");
+
+            Operations.Outcome outcome = Operations.ImgRepackCmd(args[0], args[1], directory, folder,
+                outImg, outDir, outDtz, Progress());
             PrintOutcome(outcome);
             return outcome.Ok ? 0 : 1;
         }

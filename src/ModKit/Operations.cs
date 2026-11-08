@@ -200,6 +200,46 @@ namespace ModKit
             };
         }
 
+        /// <summary>
+        /// Repacks an IMG and patches the streaming table in GAME.DAT in one go, so
+        /// entries may change size. The folder is optional: files that are not there
+        /// are carried over from the original archive.
+        /// </summary>
+        public static Outcome ImgRepackCmd(string image, string dat, string directory, string folder,
+            string outImg, string outDir, string outDtz, Action<int> progress)
+        {
+            if (!File.Exists(image)) return Outcome.Fail("no such IMG: " + image);
+            if (!File.Exists(dat)) return Outcome.Fail("no such GAME.DTZ/DAT: " + dat);
+            if (!string.IsNullOrEmpty(folder) && !Directory.Exists(folder))
+                return Outcome.Fail("no such folder: " + folder);
+
+            ImgRepack.Result result = ImgRepack.Run(image, directory, dat,
+                string.IsNullOrEmpty(folder) ? Path.GetDirectoryName(image) : folder,
+                outImg, outDir, outDtz, progress);
+
+            return new Outcome
+            {
+                Ok = true,
+                Message = "repacked " + result.Entries + " entries (" + result.InPlace +
+                          " in place, " + result.Relocated + " relocated, " +
+                          result.Patched + " slots patched)" +
+                          (result.MissingFromFolder > 0
+                              ? " (" + result.MissingFromFolder + " taken from the old image)"
+                              : ""),
+                Data = Json.O(
+                    "img", result.ImagePath,
+                    "dir", result.DirectoryPath,
+                    "dtz", result.DtzPath,
+                    "entries", (long)result.Entries,
+                    "inPlace", (long)result.InPlace,
+                    "relocated", (long)result.Relocated,
+                    "patched", (long)result.Patched,
+                    "oldSize", result.OldImageSize,
+                    "newSize", result.NewImageSize,
+                    "warnings", result.Warnings.ToArray())
+            };
+        }
+
         // ---------------------------------------------------------------- DTZ        // ---------------------------------------------------------------- DTZ
 
         public static Outcome DtzInspect(string source, string namesPath)

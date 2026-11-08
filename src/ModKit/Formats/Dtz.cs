@@ -358,6 +358,52 @@ namespace ModKit.Formats
             return result;
         }
 
+        /// <summary>
+        /// Rewrites one streaming entry (sector position and size) in place.
+        /// Only plain integers change, so the relocation table stays valid and the
+        /// file keeps its size - no pointer fixups are needed.
+        /// </summary>
+        public bool SetStreamingPosition(bool isTexture, int index, long posSectors, long sizeSectors)
+        {
+            int array = isTexture ? TextureArray : ModelArray;
+            int count = isTexture ? StreamingTextureCount : StreamingModelCount;
+            if (index < 0 || index >= count) return false;
+
+            int at = array + index * StreamingInfoSize;
+            if (at + StreamingInfoSize > Data.Length) return false;
+
+            Util.PutU32(Data, at + 12, (uint)posSectors);
+            Util.PutU32(Data, at + 16, (uint)sizeSectors);
+            return true;
+        }
+
+        /// <summary>Sanity report used by the repack step and by the CLI.</summary>
+        public List<Dictionary<string, object>> ValidateStreaming(int limit)
+        {
+            var problems = new List<Dictionary<string, object>>();
+            for (int i = 0; i < StreamingModelCount && problems.Count < limit; i++)
+            {
+                RawStream stream = ReadStream(ModelArray, i);
+                if (stream == null || stream.Size == 0) continue;
+                if (stream.Offset == 0 || stream.Size > 100000 || stream.Offset > 2000000)
+                    problems.Add(Json.O("kind", "mdl", "index", (long)i,
+                        "offset", stream.Offset, "size", stream.Size));
+            }
+            for (int i = 0; i < StreamingTextureCount && problems.Count < limit; i++)
+            {
+                RawStream stream = ReadStream(TextureArray, i);
+                if (stream == null || stream.Size == 0) continue;
+                if (stream.Offset == 0 || stream.Size > 100000 || stream.Offset > 2000000)
+                    problems.Add(Json.O("kind", "tex", "index", (long)i,
+                        "offset", stream.Offset, "size", stream.Size));
+            }
+            return problems;
+        }
+
+        public int StreamingModelSlots { get { return StreamingModelCount; } }
+        public int StreamingTextureSlots { get { return StreamingTextureCount; } }
+        public bool IsIndexed { get { return Game == GameKind.LcsPsp; } }
+
         // ------------------------------------------------------------ writing
 
         public void SaveDat(string path)
