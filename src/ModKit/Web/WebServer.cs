@@ -248,13 +248,38 @@ namespace ModKit.Web
         {
             try
             {
+                string extension = Path.GetExtension(fullPath).ToLowerInvariant();
+                bool volatileFile = extension == ".html" || extension == ".js" || extension == ".css";
+
+                // ETag from size + timestamp: after "build.cmd" the browser gets the new CSS
+                // on the next reload instead of running a 10-minute-old copy from its cache.
+                var info = new FileInfo(fullPath);
+                string etag = "\"" + info.Length.ToString("x") + "-" + info.LastWriteTimeUtc.Ticks.ToString("x") + "\"";
+                string ifNoneMatch = request.GetHeader("If-None-Match", null);
+                if (volatileFile && ifNoneMatch != null && ifNoneMatch.Trim() == etag)
+                {
+                    var notModified = new HttpResponse
+                    {
+                        Status = 304,
+                        StatusText = "Not Modified",
+                        ContentType = HttpCore.ContentTypeFor(fullPath)
+                    };
+                    notModified.Headers["ETag"] = etag;
+                    notModified.Headers["Cache-Control"] = "no-cache";
+                    return notModified;
+                }
+
                 byte[] data = File.ReadAllBytes(fullPath);
                 var response = HttpResponse.Bytes(data, HttpCore.ContentTypeFor(fullPath));
-                string extension = Path.GetExtension(fullPath).ToLowerInvariant();
-                if (extension == ".html" || extension == ".js" || extension == ".css")
+                if (volatileFile)
+                {
                     response.Headers["Cache-Control"] = "no-cache";
+                    response.Headers["ETag"] = etag;
+                }
                 else
+                {
                     response.Headers["Cache-Control"] = "public, max-age=600";
+                }
                 return response;
             }
             catch (Exception ex)

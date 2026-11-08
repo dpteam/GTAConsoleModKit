@@ -38,6 +38,8 @@ WORK = GAMES / "_work"
 EXTRACTED = GAMES / "extracted"
 MANIFEST_MD = GAMES / "MANIFEST.md"
 MANIFEST_JSON = GAMES / "manifest.json"
+# a copy of the report that goes into git (refs/ is ignored), refreshed on every run
+DOCS_SNAPSHOT = ROOT / "docs" / "GAME_IMAGES.md"
 MODKIT = ROOT / "bin" / "ModKit.exe"
 SEVEN_ZIP = "7z"
 
@@ -355,6 +357,17 @@ def write_markdown(records: list[dict]) -> None:
     ]
 
     MANIFEST_MD.write_text("\n".join(lines), encoding="utf-8-sig")
+
+    # keep the committed snapshot in docs/ in sync, no hand editing
+    if DOCS_SNAPSHOT.parent.is_dir():
+        DOCS_SNAPSHOT.write_text("\n".join(lines + [
+            "---",
+            "",
+            "> Снимок отчёта. Обновляется автоматически `tools/import_games.py` и",
+            "> `tools/prune_games.py`. Живая версия — `refs/GAMES/MANIFEST.md`",
+            "> (папка `refs/` в git не входит).",
+            "",
+        ]), encoding="utf-8")
 
 
 if __name__ == "__main__":

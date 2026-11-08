@@ -146,8 +146,9 @@ namespace ModKit.Core
 ; web UI (the modding kit front-end)
 webPort=44700
 webPortFallbacks=44710,44720,44730
-; 127.0.0.1 = local only, 0.0.0.0 = reachable from LAN (needed for team sessions)
-bind=127.0.0.1
+; 0.0.0.0 = reachable from the LAN (phone, second PC, team sessions)
+; 127.0.0.1 = this machine only
+bind=0.0.0.0
 ; how many HTTP workers serve requests
 workers=4
 

@@ -145,6 +145,21 @@ body[data-theme="oled"] .topbar { background: linear-gradient(#101820, #0a1016);
   font-size: 11px;
 }
 
+/* the opened dropdown is drawn by the OS: without an explicit colour the items
+   inherit the light top-bar text and land white-on-white */
+#lang { color-scheme: light; }
+#lang option {
+  background: #ffffff;
+  color: #1b2027;
+}
+body[data-theme="dark"] #lang,
+body[data-theme="oled"] #lang { color-scheme: dark; }
+body[data-theme="dark"] #lang option,
+body[data-theme="oled"] #lang option {
+  background: #262e38;
+  color: #dfe6ef;
+}
+
 /* --------------------------------------------------------------- layout */
 
 main {

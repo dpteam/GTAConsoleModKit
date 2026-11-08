@@ -26,7 +26,12 @@ refs/g3DTZ, refs/cso-to-iso                референсные репозит
 python tools\import_games.py                  :: разобрать архивы (1 раз на папку)
 python tools\prune_games.py --delete-images --delete-archives
                                              :: хеши данных, удаление дублей и мусора
+python tools\render_manifest.py              :: перерисовать отчёты без пересчёта хешей
 ```
+
+`render_manifest.py` строит `refs/GAMES/MANIFEST.md` и снимок для git
+`docs/GAME_IMAGES.md` из `manifest.json` — мгновенно, без распаковки и хеширования.
+Снимок в `docs/` перезаписывается автоматически и импортом, и `prune_games.py`.
 
 `import_games.py` для каждого архива:
 

@@ -115,8 +115,19 @@ ModKit.exe chk-export  content\player_chk content_png
 Ключевое: `server.webPort`, `server.bind`, `workspace.root`, `workspace.gamesRoot`,
 `logging.fileLevel`, `logging.consoleLevel`, `resilience.*`, `limits.*`.
 
-`bind=0.0.0.0` нужен для совместной работы по сети; по умолчанию сервер слушает только
-`127.0.0.1`. Аутентификации в этой версии нет — наружу без reverse proxy не выставляйте.
+По умолчанию сервер слушает `0.0.0.0:44700` — морда открывается с телефона и второго
+компьютера по `http://<LAN-IP>:44700/`. Чтобы Windows пропустил входящие, один раз
+запустите `tools\firewall.cmd` (появится UAC):
+
+| Правило | Порт | Источники |
+|---|---|---|
+| `DPT.PSP ModKit` | 44700 (+ fallback из `config.ini`) | LAN/приватные адреса |
+
+Опции: `-AnySource` (разрешить с любых адресов), `-Remove` (удалить правило).
+Скрипт печатает локальные IPv4, состояние сокетов и проверку `/api/health`.
+
+Хотите вернуть «только этот компьютер» — `bind=127.0.0.1` в `config.ini`.
+Аутентификации в этой версии нет: наружу (Nginx Proxy Manager) — только вместе с ней.
 
 ## Устройство проекта
 
@@ -151,6 +162,8 @@ data/modelnames.vcs.txt             hash → имя модели (VCS)
 tools/build_modelnames.py           пересборка этих таблиц из дампов g3DTZ
 tools/import_games.py               разбор архивов с образами (refs/GAMES)
 tools/prune_games.py                отпечатки данных, удаление дублей и мусора
+tools/render_manifest.py            перерисовать MANIFEST.md и снимок docs/GAME_IMAGES.md
+tools/firewall.cmd / .ps1           правило Windows Firewall (UAC) для морды
 tools/ci-test.ps1                   всё сразу: сборка, тесты, отчёт
 tools/test-formats.ps1              тест форматов на реальных данных (если они есть)
 tools/test-web.ps1                  тест HTTP API и статики

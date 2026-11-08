@@ -10,10 +10,10 @@ SHA-256 образов сохранены здесь, поэтому видно,
 
 | | |
 |---|---|
-| Записей (архивов/образов) | 20 |
-| Уникальных образов (по SHA-256 ISO) | 17 |
-| Уникальных наборов данных (по USRDIR) | 14 |
-| Оставлено деревьев | 14 |
+| Записей (архивов/образов) | 25 |
+| Уникальных образов (по SHA-256 ISO) | 22 |
+| Уникальных наборов данных (по USRDIR) | 19 |
+| Оставлено деревьев | 19 |
 | Дубликатов данных (деревья удалены) | 6 |
 
 ## Распакованные образы
@@ -22,7 +22,12 @@ SHA-256 образов сохранены здесь, поэтому видно,
 |---|---|---|---|---|
 | Liberty City Stories (RUS, CSO removed) | 815.1 MB | `ULUS10041` | GTA: Liberty City Stories | `extracted/LCS/` |
 | Vice City Stories (RUS, CSO removed) | 1.0 GB | `ULUS10160` | Grand Theft Auto: Vice City Stories | `extracted/VCS/` |
+| Grand Theft Auto - Chinatown Wars (Europe) (En,Fr,De,Es,It).7z | 862.3 MB | `ULES01347` | Grand Theft Auto: Chinatown Wars | `extracted/chinatown_wars_europe_en_fr_de_es_it/` |
+| Grand Theft Auto - Chinatown Wars (Europe) (En,Fr,De,Es,It) (Beta) (v0.01) (2009-08-31).7z | 771.7 MB | `ULET01349` | Grand Theft Auto: Chinatown Wars | `extracted/chinatown_wars_europe_en_fr_de_es_it_beta_v0_01_2009_08_31/` |
+| Grand Theft Auto - Chinatown Wars (Europe) (En,Fr,De,Es,It) (Beta) (v0.02) (2009-09-15).7z | 859.6 MB | `ULET01349` | Grand Theft Auto: Chinatown Wars | `extracted/chinatown_wars_europe_en_fr_de_es_it_beta_v0_02_2009_09_15/` |
+| Grand Theft Auto - Chinatown Wars (Japan).7z | 842.7 MB | `ULJM05604` | Grand Theft Auto: Chinatown Wars | `extracted/chinatown_wars_japan/` |
 | Chinatown Wars (RUS, CSO removed) | 758.4 MB | `ULUS10490` | Grand Theft Auto: Chinatown Wars | `extracted/chinatown_wars_rus/` |
+| Grand Theft Auto - Chinatown Wars (USA).7z | 862.4 MB | `ULUS10490` | Grand Theft Auto: Chinatown Wars | `extracted/chinatown_wars_usa/` |
 | Grand Theft Auto - Liberty City Stories (Europe) (En,Fr,De,Es,It) (v1.05).7z | 1.2 GB | `ULES00151` | Grand Theft Auto: Liberty City Stories | `extracted/liberty_city_stories_europe_en_fr_de_es_it_v1_05/` |
 | Grand Theft Auto - Liberty City Stories (Europe) (En,Fr,De,Es,It) (v2.00).7z | 1.2 GB | `ULES00151` | Grand Theft Auto: Liberty City Stories | `extracted/liberty_city_stories_europe_en_fr_de_es_it_v2_00/` |
 | Grand Theft Auto - Liberty City Stories (Europe) (En,Fr,De,Es,It) (v3.00).7z | 1.2 GB | `ULES00151` | Grand Theft Auto: Liberty City Stories | `extracted/liberty_city_stories_europe_en_fr_de_es_it_v3_00/` |
@@ -85,6 +90,6 @@ SHA-256 образов сохранены здесь, поэтому видно,
 
 ---
 
-> Это снимок отчёта на момент импорта. Живая версия лежит в
-> efs/GAMES/MANIFEST.md\ (папка efs/\ в git не входит) и обновляется
-> скриптами \	ools/import_games.py\ / \	ools/prune_games.py\.
+> Снимок отчёта. Обновляется автоматически `tools/import_games.py` и
+> `tools/prune_games.py`. Живая версия — `refs/GAMES/MANIFEST.md`
+> (папка `refs/` в git не входит).
