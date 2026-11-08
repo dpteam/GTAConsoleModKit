@@ -340,6 +340,35 @@ namespace ModKit.Web
                 }
             }
 
+            if (tail == "texture-import" && request.Method == "POST")
+            {
+                string relative = ParseString(request, "path", "");
+                int index = ParseInt(request, "index", 0, 0, 100000);
+                string target = Util.SafeCombine(project.FilesPath, relative);
+                if (target == null) return HttpResponse.Error(403, "path traversal denied");
+                if (!File.Exists(target)) return HttpResponse.Error(404, "no such file");
+                if (request.Body == null || request.Body.Length == 0)
+                    return HttpResponse.Error(400, "empty image body");
+
+                string temp = Path.Combine(Path.GetTempPath(),
+                    "modkit-tex-" + Guid.NewGuid().ToString("N") + ".png");
+                try
+                {
+                    Util.WriteAllBytesAtomic(temp, request.Body);
+                    Operations.Outcome outcome = Operations.ChkReplace(target, temp, index, null, null);
+                    if (!outcome.Ok) return HttpResponse.Error(400, outcome.Message);
+                    Project.OpRecord op = project.AddOp(ParseString(request, "user", project.Owner),
+                        "texture-import", relative, outcome.Message);
+                    project.Save();
+                    ctx.Workspace.Sessions.NotifyChange(project.Id);
+                    return HttpResponse.Json(Json.O("ok", true, "op", op.ToJson(), "data", outcome.Data));
+                }
+                finally
+                {
+                    try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { }
+                }
+            }
+
             if (tail == "audio")
             {
                 string relative = ParseString(request, "path", "");

@@ -1,4 +1,4 @@
-<#
+﻿<#
     Format tests for DPT.PSP GTA Modding Kit.
 
     Uses the extracted game dumps from refs\GAMES\extracted when they are present;
@@ -178,6 +178,32 @@ if (Test-Path $dtz) {
             Run @('chk-export', $chk, $outdir) | Out-Null
             $file = Join-Path $outdir 'loadsc0.png'
             (Test-Path $file) -and ((Get-Item $file).Length -gt 20000)
+        }
+
+        Check "chk-replace roundtrip is pixel identical" {
+            $png1 = Join-Path $temp 'rt1'
+            $png2 = Join-Path $temp 'rt2'
+            $copy = Join-Path $temp 'rt.chk'
+            Run @('chk-export', $chk, $png1) | Out-Null
+            Copy-Item $chk $copy -Force
+            $out = Run @('chk-replace', $copy, (Join-Path $png1 'loadsc0.png'), '0')
+            Run @('chk-export', $copy, $png2) | Out-Null
+            $a = [System.IO.File]::ReadAllBytes((Join-Path $png1 'loadsc0.png'))
+            $b = [System.IO.File]::ReadAllBytes((Join-Path $png2 'loadsc0.png'))
+            $same = $a.Length -eq $b.Length
+            if ($same) {
+                for ($i = 0; $i -lt $a.Length; $i++) { if ($a[$i] -ne $b[$i]) { $same = $false; break } }
+            }
+            $sizeSame = (Get-Item $copy).Length -eq (Get-Item $chk).Length
+            ($out -match 'replaced texture') -and $same -and $sizeSame
+        }
+
+        Check "chk-replace refuses a wrong sized image" {
+            $png = Join-Path $temp 'rt1\loadsc0.png'
+            $copy = Join-Path $temp 'rt3.chk'
+            Copy-Item $chk $copy -Force
+            $out = Run @('chk-replace', $copy, $png, '1')
+            $out -match 'out of range'
         }
     } else { Skip "chk tests" "no LOADSC0.CHK" }
 

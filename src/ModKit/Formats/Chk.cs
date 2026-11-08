@@ -394,9 +394,13 @@ namespace ModKit.Formats
             int best = guess;
             int bestDelta = 0;
             double bestScore = double.MaxValue;
+            // Trailing alignment padding sits *after* the palette, so the real
+            // palette is never later than the guess. Searching only backwards also
+            // makes the choice stable when the pixels change: a shifted candidate
+            // can score nearly as well as the real one.
             int window = 768;
 
-            for (int delta = -window; delta <= window; delta += 4)
+            for (int delta = -window; delta <= 0; delta += 4)
             {
                 int candidate = guess + delta;
                 if (candidate < texture.DataOffset) continue;
@@ -411,9 +415,12 @@ namespace ModKit.Formats
                 // A palette that flattens the image is wrong even if it looks "smooth".
                 if (distinct < 4) continue;
 
-                double score = average / spread;
+                // Dividing by the number of distinct colours matters: a shifted
+                // palette can make the image look locally smooth (few colours, low
+                // neighbour difference) and would otherwise win the search.
+                double score = average / spread / distinct;
                 bool better = score < bestScore * 0.99;
-                bool tie = score <= bestScore * 1.01 && Math.Abs(delta) < Math.Abs(bestDelta);
+                bool tie = score <= bestScore * 1.01 && candidate > best;
                 if (better || tie)
                 {
                     bestScore = Math.Min(bestScore, score);
@@ -691,6 +698,371 @@ namespace ModKit.Formats
             int tile = (y / 8) * tilesX + (x / tileWidth);
             int inTile = (y % 8) * 16 + (x % tileWidth) * Math.Max(1, bytesPerPixel);
             return tile * 128 + inTile;
+        }
+
+        // ------------------------------------------------------------- encode
+
+        /// <summary>
+        /// Replaces the pixels of one texture with the contents of an image and
+        /// writes them back in the on-disc layout (palette + swizzle + mip chain).
+        ///
+        /// Palette policy:
+        ///   * if every colour of the new image already exists in the current
+        ///     palette, the palette bytes are left untouched (byte exact round trip
+        ///     for "export, tweak, import" workflows);
+        ///   * otherwise a new palette is built from the most frequent colours and
+        ///     pixels are mapped to the nearest entry.
+        ///
+        /// Mip levels are re-generated with a box filter so distant geometry does
+        /// not show the old artwork.
+        /// </summary>
+        public void ReplacePixels(Texture texture, Bitmap image)
+        {
+            if (texture == null) throw new ArgumentNullException("texture");
+            if (texture.Raster == null) throw new InvalidOperationException("texture has no raster");
+            if (image == null) throw new ArgumentNullException("image");
+
+            if (texture.Format != Rsl.TextureFormat.Pal4 && texture.Format != Rsl.TextureFormat.Pal8)
+                throw new NotSupportedException("only paletted textures can be written back (this one is " +
+                                                Rsl.FormatName(texture.Format) + ")");
+
+            int width = texture.Width;
+            int height = texture.Height;
+            if (image.Width != width || image.Height != height)
+                throw new InvalidDataException("image is " + image.Width + "x" + image.Height +
+                                               ", texture is " + width + "x" + height);
+
+            int paletteBytes = texture.PaletteEntries * 4;
+            if (texture.PaletteOffset <= 0 || texture.PaletteOffset + paletteBytes > Data.Length)
+                throw new InvalidOperationException("palette location for this texture is unknown");
+
+            // the "end of data minus palette size" guess is a few dozen bytes off on
+            // retail files - locate the real palette before touching it
+            RefinePaletteOffset(texture);
+
+            byte[] pixels = ReadBgra(image, width, height);
+            int[] indices = MapToPalette(pixels, width, height, texture, paletteBytes);
+            WritePaletted(texture, indices, width, height);
+            WriteMips(texture, indices, width, height);
+        }
+
+        private static byte[] ReadBgra(Bitmap image, int width, int height)
+        {
+            var pixels = new byte[width * height * 4];
+            BitmapData locked = image.LockBits(new Rectangle(0, 0, width, height),
+                ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                var row = new byte[width * 4];
+                for (int y = 0; y < height; y++)
+                {
+                    Marshal.Copy((IntPtr)((long)locked.Scan0 + y * locked.Stride), row, 0, row.Length);
+                    Buffer.BlockCopy(row, 0, pixels, y * width * 4, row.Length);
+                }
+            }
+            finally
+            {
+                image.UnlockBits(locked);
+            }
+            return pixels;
+        }
+
+        /// <summary>
+        /// Maps every pixel to a palette index, rebuilding the palette only when the
+        /// current one really cannot express the image.
+        ///
+        /// Two details matter for a byte exact round trip:
+        ///   * PNG encoders are allowed to clear the RGB of fully transparent
+        ///     pixels, so an A=0 pixel is matched to any transparent palette entry
+        ///     instead of demanding an exact colour;
+        ///   * palette entries that repeat the same colour are kept as they are, the
+        ///     first one wins (the game does not care which duplicate is used).
+        /// </summary>
+        private int[] MapToPalette(byte[] pixels, int width, int height, Texture texture, int paletteBytes)
+        {
+            int entries = paletteBytes / 4;
+            int count = width * height;
+            var indices = new int[count];
+
+            var exact = new Dictionary<int, int>();   // rgb -> index (opaque entries)
+            int transparent = -1;
+            for (int i = 0; i < entries; i++)
+            {
+                int at = texture.PaletteOffset + i * 4;
+                if (Data[at + 3] == 0)
+                {
+                    if (transparent < 0) transparent = i;
+                    continue;
+                }
+                // key order follows the decoded pixels: B | G<<8 | R<<16
+                int key = Data[at + 2] | (Data[at + 1] << 8) | (Data[at] << 16);
+                if (!exact.ContainsKey(key)) exact[key] = i;
+            }
+
+            bool covered = true;
+            for (int i = 0; i < count && covered; i++)
+            {
+                if (pixels[i * 4 + 3] == 0) continue;
+                int key = pixels[i * 4] | (pixels[i * 4 + 1] << 8) | (pixels[i * 4 + 2] << 16);
+                if (!exact.ContainsKey(key)) covered = false;
+            }
+
+            if (covered)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    if (pixels[i * 4 + 3] == 0)
+                    {
+                        indices[i] = transparent >= 0 ? transparent : 0;
+                        continue;
+                    }
+                    int key = pixels[i * 4] | (pixels[i * 4 + 1] << 8) | (pixels[i * 4 + 2] << 16);
+                    indices[i] = exact[key];
+                }
+                return indices;
+            }
+
+            int missingCount = 0;
+            var missingSample = new System.Text.StringBuilder();
+            for (int i = 0; i < count; i++)
+            {
+                if (pixels[i * 4 + 3] == 0) continue;
+                int key = pixels[i * 4] | (pixels[i * 4 + 1] << 8) | (pixels[i * 4 + 2] << 16);
+                if (exact.ContainsKey(key)) continue;
+                missingCount++;
+                if (missingSample.Length < 120)
+                    missingSample.AppendFormat(" b={0} g={1} r={2} a={3};",
+                        pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3]);
+            }
+            Log.Warn(Cat.Fmt, "palette rebuild: " + missingCount + " pixels out of palette, sample:" +
+                              missingSample);
+
+            // build a palette from the most frequent colours (rgb + alpha)
+            var histogram = new Dictionary<int, int>();
+            for (int i = 0; i < count; i++)
+            {
+                int key = (pixels[i * 4] | (pixels[i * 4 + 1] << 8) | (pixels[i * 4 + 2] << 16)) |
+                          (pixels[i * 4 + 3] << 24);
+                int value;
+                histogram.TryGetValue(key, out value);
+                histogram[key] = value + 1;
+            }
+
+            var ordered = new List<KeyValuePair<int, int>>(histogram);
+            ordered.Sort(delegate(KeyValuePair<int, int> a, KeyValuePair<int, int> b)
+            {
+                return b.Value.CompareTo(a.Value);
+            });
+
+            var paletteKeys = new List<int>();
+            for (int i = 0; i < ordered.Count && paletteKeys.Count < entries; i++)
+                paletteKeys.Add(ordered[i].Key);
+
+            for (int i = 0; i < entries; i++)
+            {
+                int at = texture.PaletteOffset + i * 4;
+                int key = i < paletteKeys.Count ? paletteKeys[i] : 0;
+                Data[at] = (byte)((key >> 16) & 0xff);      // R
+                Data[at + 1] = (byte)((key >> 8) & 0xff);   // G
+                Data[at + 2] = (byte)(key & 0xff);          // B
+                Data[at + 3] = i < paletteKeys.Count ? (byte)((key >> 24) & 0xff) : (byte)255;
+            }
+
+            var lookup = new Dictionary<int, int>();
+            for (int i = 0; i < count; i++)
+            {
+                int key = (pixels[i * 4] | (pixels[i * 4 + 1] << 8) | (pixels[i * 4 + 2] << 16)) |
+                          (pixels[i * 4 + 3] << 24);
+                int index;
+                if (!lookup.TryGetValue(key, out index))
+                {
+                    index = NearestIndex(key & 0xffffff, paletteKeys);
+                    lookup[key] = index;
+                }
+                indices[i] = index;
+            }
+            return indices;
+        }
+
+        private static int NearestIndex(int colour, List<int> paletteKeys)
+        {
+            int b = colour & 0xff, g = (colour >> 8) & 0xff, r = (colour >> 16) & 0xff;
+            int best = 0;
+            int bestDistance = int.MaxValue;
+            for (int i = 0; i < paletteKeys.Count; i++)
+            {
+                int key = paletteKeys[i];
+                int dr = ((key >> 16) & 0xff) - r;
+                int dg = ((key >> 8) & 0xff) - g;
+                int db = (key & 0xff) - b;
+                int distance = dr * dr + dg * dg + db * db;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = i;
+                    if (distance == 0) break;
+                }
+            }
+            return best;
+        }
+
+        private void WritePaletted(Texture texture, int[] indices, int width, int height)
+        {
+            bool fourBit = texture.Format == Rsl.TextureFormat.Pal4;
+            int tileWidth = fourBit ? 32 : 16;
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int offset = SwizzledOffset(x, y, width, tileWidth, fourBit ? 0 : 1);
+                    int value = indices[y * width + x];
+                    int at = texture.DataOffset + (fourBit ? offset / 2 : offset);
+                    if (at < 0 || at >= Data.Length) continue;
+                    if (fourBit)
+                    {
+                        // low nibble = even offset, high nibble = odd offset
+                        if ((offset & 1) == 0) Data[at] = (byte)((Data[at] & 0xf0) | (value & 0x0f));
+                        else Data[at] = (byte)((Data[at] & 0x0f) | ((value & 0x0f) << 4));
+                    }
+                    else
+                    {
+                        Data[at] = (byte)value;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds the mip chain (box filter, 2x2) inside the space the original
+        /// texture used, so the game does not keep showing the previous artwork at
+        /// distance.
+        /// </summary>
+        private void WriteMips(Texture texture, int[] indices, int width, int height)
+        {
+            // Only 8bpp is verified: its mip chain is a sequence of swizzled levels
+            // right after the base image (5461 bytes for a 128x128 texture, which is
+            // exactly 64^2+32^2+... ). For 4bpp we keep the original chain and say so,
+            // because nibble packing inside the chain is not confirmed on retail data.
+            if (texture.Format != Rsl.TextureFormat.Pal8)
+            {
+                Log.Warn(Cat.Fmt, "mip chain of " + texture.Name + " left untouched (only pal8 mips are verified)");
+                return;
+            }
+
+            int baseBytes = texture.Width * texture.Height;
+            int limit = texture.DataLength - texture.PaletteEntries * 4;
+
+            // Many textures simply have no mip chain: the palette sits right after
+            // the base level. Writing "mips" there would shred the palette, so check
+            // that the first level fits before touching anything.
+            if (limit - baseBytes < baseBytes / 4)
+            {
+                Log.Debug(Cat.Fmt, "texture " + texture.Name + " has no mip chain, palette kept");
+                return;
+            }
+
+            // Mip levels are generated in colour space (average the RGB of a 2x2
+            // block, then map back to the palette). Sampling index values directly
+            // shifts hues badly, because palette indices carry no colour order.
+            int entries = texture.PaletteEntries;
+            var paletteRgb = new int[entries];
+            for (int i = 0; i < entries; i++)
+            {
+                int at = texture.PaletteOffset + i * 4;
+                paletteRgb[i] = Data[at + 2] | (Data[at + 1] << 8) | (Data[at] << 16);
+            }
+            var nearestCache = new Dictionary<int, int>();
+
+            int current = width;
+            int currentHeight = height;
+            int offset = baseBytes;
+            var source = indices;
+
+            while (current > 1 && currentHeight > 1)
+            {
+                int nextWidth = current / 2;
+                int nextHeight = currentHeight / 2;
+                if (offset + nextWidth * nextHeight > limit) break;
+
+                var next = new int[nextWidth * nextHeight];
+                for (int y = 0; y < nextHeight; y++)
+                {
+                    for (int x = 0; x < nextWidth; x++)
+                    {
+                        int r = 0, g = 0, b = 0;
+                        for (int dy = 0; dy < 2; dy++)
+                        {
+                            for (int dx = 0; dx < 2; dx++)
+                            {
+                                int index = source[(y * 2 + dy) * current + (x * 2 + dx)];
+                                int colour = paletteRgb[index < entries ? index : 0];
+                                b += colour & 0xff;
+                                g += (colour >> 8) & 0xff;
+                                r += (colour >> 16) & 0xff;
+                            }
+                        }
+                        int average = ((b / 4) & 0xff) | (((g / 4) & 0xff) << 8) | (((r / 4) & 0xff) << 16);
+                        int mapped;
+                        if (!nearestCache.TryGetValue(average, out mapped))
+                        {
+                            mapped = NearestIndex(average, paletteRgb, entries);
+                            nearestCache[average] = mapped;
+                        }
+                        next[y * nextWidth + x] = mapped;
+                    }
+                }
+
+                for (int y = 0; y < nextHeight; y++)
+                {
+                    for (int x = 0; x < nextWidth; x++)
+                    {
+                        int swizzled = SwizzledOffset(x, y, nextWidth, 16, 1);
+                        int at = texture.DataOffset + offset + swizzled;
+                        if (at >= 0 && at < Data.Length && offset + swizzled < limit)
+                            Data[at] = (byte)next[y * nextWidth + x];
+                    }
+                }
+
+                offset += nextWidth * nextHeight;
+                source = next;
+                current = nextWidth;
+                currentHeight = nextHeight;
+            }
+        }
+
+        /// <summary>Nearest palette entry for a packed BGR colour.</summary>
+        private static int NearestIndex(int colour, int[] paletteRgb, int entries)
+        {
+            int b = colour & 0xff, g = (colour >> 8) & 0xff, r = (colour >> 16) & 0xff;
+            int best = 0;
+            int bestDistance = int.MaxValue;
+            for (int i = 0; i < entries; i++)
+            {
+                int key = paletteRgb[i];
+                int dr = ((key >> 16) & 0xff) - r;
+                int dg = ((key >> 8) & 0xff) - g;
+                int db = (key & 0xff) - b;
+                int distance = dr * dr + dg * dg + db * db;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = i;
+                    if (distance == 0) break;
+                }
+            }
+            return best;
+        }
+
+        private int BaseLevelBytes(Texture texture)
+        {
+            return texture.Width * texture.Height;
+        }
+
+        /// <summary>Writes the modified chunk back to disk (atomic).</summary>
+        public void Save(string path)
+        {
+            Util.WriteAllBytesAtomic(path, Data);
         }
     }
 }

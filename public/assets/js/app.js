@@ -286,6 +286,15 @@
           card.appendChild(img);
           card.appendChild(el('div', 'tex-name', texture.name));
           card.appendChild(el('div', 'tex-meta', texture.width + '×' + texture.height + ' ' + texture.format));
+
+          var replaceButton = el('button', 'tex-import', '↥');
+          replaceButton.title = t('tex.import');
+          replaceButton.addEventListener('click', function (event) {
+            event.stopPropagation();
+            pickTexture(replaceButton, texture);
+          });
+          card.appendChild(replaceButton);
+
           card.addEventListener('click', function () {
             window.open(API.textureUrl(state.projectId, state.selectedFile, texture.index), '_blank');
           });
@@ -342,6 +351,28 @@
       audio.src = API.audioUrl(state.projectId, state.selectedFile);
       box.appendChild(audio);
     }
+  }
+
+  function pickTexture(anchor, texture) {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      document.body.removeChild(input);
+      if (!file) return;
+      API.textureImport(state.projectId, state.selectedFile, texture.index, file)
+        .then(function (data) {
+          toast(t('toast.texReplaced', texture.name), 'ok');
+          global.Sound.play('ok');
+          inspectFile(state.selectedFile);
+          refreshProjectOps();
+        })
+        .catch(fail);
+    });
+    input.click();
   }
 
   // -------------------------------------------------------------- operations

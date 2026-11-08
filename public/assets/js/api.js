@@ -67,6 +67,24 @@
       return '/api/projects/' + encode(id) + '/file?path=' + encode(path);
     },
 
+    textureImport: function (id, path, index, file) {
+      return new Promise(function (resolve, reject) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/projects/' + encode(id) + '/texture-import?path=' +
+          encode(path) + '&index=' + index, true);
+        xhr.setRequestHeader('Content-Type', 'image/png');
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState !== 4) return;
+          var payload = null;
+          if (xhr.responseText) { try { payload = JSON.parse(xhr.responseText); } catch (e) { } }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(payload);
+          else reject(new Error((payload && payload.error) || ('HTTP ' + xhr.status)));
+        };
+        xhr.onerror = function () { reject(new Error('network error')); };
+        xhr.send(file);
+      });
+    },
+
     upload: function (id, path, file) {
       return new Promise(function (resolve, reject) {
         var xhr = new XMLHttpRequest();

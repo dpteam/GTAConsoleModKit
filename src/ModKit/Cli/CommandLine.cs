@@ -58,6 +58,8 @@ namespace ModKit.Cli
                         return ChkListCommand(rest);
                     case "chk-export":
                         return ChkExport(rest);
+                    case "chk-replace":
+                        return ChkReplace(rest);
                     case "gxt-dump":
                         return GxtDump(rest);
                     case "vag-to-wav":
@@ -104,6 +106,7 @@ DPT.PSP GTA Modding Kit - headless commands
   dtz-models <GAME.DTZ> [--vcs] [--limit N]
   chk-list <file.chk|.xtx>             list textures
   chk-export <file.chk> [folder]       export every texture as PNG
+  chk-replace <chk> <png> [i] [out]    put a PNG back into a texture (mip + palette)
   gxt-dump <file.gxt> [out.txt]        dump the text table
   vag-to-wav <file.vag> [out.wav]      decode PS-ADPCM
   wav-to-vag <file.wav> [out.vag]      encode PS-ADPCM
@@ -316,6 +319,39 @@ Notes
         {
             if (args.Count < 1) return Usage("chk-export <file.chk> [folder]");
             Operations.Outcome outcome = Operations.ChkExport(args[0], args.Count > 1 ? args[1] : null);
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int ChkReplace(List<string> args)
+        {
+            string name = null;
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (args[i] == "--name" && i + 1 < args.Count)
+                {
+                    name = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                }
+            }
+            if (args.Count < 2) return Usage("chk-replace <file.chk> <image.png> [index] [out.chk] [--name tex]");
+
+            int index = 0;
+            string target = null;
+            if (args.Count > 2)
+            {
+                if (!int.TryParse(args[2], out index))
+                {
+                    target = args[2];
+                }
+                else if (args.Count > 3)
+                {
+                    target = args[3];
+                }
+            }
+
+            Operations.Outcome outcome = Operations.ChkReplace(args[0], args[1], index, name, target);
             PrintOutcome(outcome);
             return outcome.Ok ? 0 : 1;
         }

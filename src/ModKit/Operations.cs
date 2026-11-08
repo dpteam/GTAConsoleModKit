@@ -281,6 +281,62 @@ namespace ModKit
             };
         }
 
+        /// <summary>
+        /// Replaces one texture inside a CHK/XTX chunk with a PNG and writes the
+        /// chunk back. The palette is reused when it already covers the image, so
+        /// "export -> edit -> import" keeps the original colours exactly. Mip levels
+        /// are regenerated for pal8.
+        /// </summary>
+        public static Outcome ChkReplace(string source, string pngPath, int index, string textureName,
+            string target)
+        {
+            if (!File.Exists(source)) return Outcome.Fail("no such file: " + source);
+            if (!File.Exists(pngPath)) return Outcome.Fail("no such image: " + pngPath);
+
+            ChkFile chk = ChkFile.Load(source);
+            if (chk.Textures.Count == 0) return Outcome.Fail("the file contains no textures");
+
+            int resolved = index;
+            if (!string.IsNullOrEmpty(textureName))
+            {
+                resolved = -1;
+                for (int i = 0; i < chk.Textures.Count; i++)
+                {
+                    if (string.Equals(chk.Textures[i].Name, textureName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        resolved = i;
+                        break;
+                    }
+                }
+                if (resolved < 0) return Outcome.Fail("no texture named '" + textureName + "'");
+            }
+            if (resolved < 0 || resolved >= chk.Textures.Count)
+                return Outcome.Fail("texture index " + resolved + " is out of range, the file has " +
+                                    chk.Textures.Count);
+
+            ChkFile.Texture texture = chk.Textures[resolved];
+            using (var image = new System.Drawing.Bitmap(pngPath))
+            {
+                if (image.Width != texture.Width || image.Height != texture.Height)
+                    return Outcome.Fail("image is " + image.Width + "x" + image.Height +
+                                        " but texture '" + texture.Name + "' is " +
+                                        texture.Width + "x" + texture.Height);
+                chk.ReplacePixels(texture, image);
+            }
+
+            string output = string.IsNullOrEmpty(target) ? source : target;
+            chk.Save(output);
+            return new Outcome
+            {
+                Ok = true,
+                Message = "replaced texture '" + texture.Name + "' and wrote " + Path.GetFileName(output),
+                Data = Json.O("output", output, "texture", texture.Name,
+                    "index", (long)resolved, "width", (long)texture.Width,
+                    "height", (long)texture.Height, "format", Rsl.FormatName(texture.Format),
+                    "size", new FileInfo(output).Length)
+            };
+        }
+
         // ---------------------------------------------------------------- GXT
 
         public static Outcome GxtDump(string source, string target)

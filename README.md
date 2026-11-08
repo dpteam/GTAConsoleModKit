@@ -21,7 +21,7 @@ ModKit.exe identify LOADSC0.CHK
 | `GAME.DTZ` ↔ `GAME.DAT` | да | да (zlib) |
 | Таблица стриминга `GAME.DAT` → `.DIR` | да (LCS PSP проверено на диске) | экспорт DIR |
 | `.LVZ` (zlib + чанк `WRLD`) | да | пересжатие |
-| `.CHK` / `.XTX` (текстуры) | да: список, палитра, swizzle, mip, PNG | только чтение пока |
+| `.CHK` / `.XTX` (текстуры) | да: список, палитра, swizzle, mip, PNG | да: PNG → текстура (pal4/pal8) |
 | `.MDL`, `.ANIM` (чанки `ldm`/`anim`) | заголовок и границы | — |
 | `.GXT` (таблицы текста) | да, дамп в текст | — |
 | `.VAG` (PS-ADPCM) | да → WAV | да ← WAV |
@@ -71,6 +71,7 @@ ModKit.exe dtz-dir <GAME.DTZ> [out.dir] [--vcs]
 ModKit.exe dtz-models <GAME.DTZ> [--vcs] [--limit N]
 ModKit.exe chk-list <file.chk|.xtx>
 ModKit.exe chk-export <file.chk> [folder]
+ModKit.exe chk-replace <chk> <png> [index] [out.chk]
 ModKit.exe gxt-dump <file.gxt> [out.txt]
 ModKit.exe vag-to-wav <file.vag> [out.wav]
 ModKit.exe wav-to-vag <file.wav> [out.vag]

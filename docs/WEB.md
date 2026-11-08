@@ -32,6 +32,7 @@
 | GET | `/api/projects/{id}/file?path=` | скачать файл |
 | GET | `/api/projects/{id}/inspect?path=` | формат + текстуры/строки/модели |
 | GET | `/api/projects/{id}/texture?path=&index=` | PNG конкретной текстуры |
+| POST | `/api/projects/{id}/texture-import?path=&index=` | заменить текстуру (тело — PNG) |
 | GET | `/api/projects/{id}/audio?path=` | WAV из VAG |
 
 `path` — относительный (внутри `files/`) или абсолютный, но только внутри `workspace`
