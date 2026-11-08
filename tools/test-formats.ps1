@@ -161,6 +161,51 @@ if (Test-Path $dtz) {
         $out -match '1121 entries' -and $out -match 'PLAYER\.MDL' -and $out -match 'PLAYER\.CHK'
     }
 
+    Check "img-pack + img-list + img-extract roundtrip" {
+        $src = Join-Path $temp 'pack-src'
+        New-Item -ItemType Directory -Path $src -Force | Out-Null
+        $payload = New-Object byte[] 5000
+        $random.NextBytes($payload)
+        [System.IO.File]::WriteAllBytes((Join-Path $src 'one.mdl'), $payload)
+        [System.IO.File]::WriteAllBytes((Join-Path $src 'two.mdl'), $payload)
+
+        $img2 = Join-Path $temp 'pack.img'
+        $dir2 = Join-Path $temp 'pack.dir'
+        Run @('img-pack', $src, $img2, '--dir', $dir2) | Out-Null
+        $listing = Run @('img-list', $img2, $dir2)
+        $outdir = Join-Path $temp 'pack-out'
+        Run @('img-extract', $img2, $outdir, '--dir', $dir2) | Out-Null
+
+        $ok = ($listing -match '2 entries') -and ($listing -match 'ONE.MDL') -and ($listing -match 'TWO.MDL')
+        if ($ok) {
+            $a = [System.IO.File]::ReadAllBytes((Join-Path $src 'one.mdl'))
+            $b = [System.IO.File]::ReadAllBytes((Join-Path $outdir 'ONE.MDL'))
+            $ok = $b.Length -ge $a.Length
+            if ($ok) {
+                for ($i = 0; $i -lt $a.Length; $i++) { if ($a[$i] -ne $b[$i]) { $ok = $false; break } }
+            }
+        }
+        $ok
+    }
+
+    Check "img-replace keeps the archive size and refuses growth" {
+        $copy = Join-Path $temp 'patch.img'
+        Copy-Item $img $copy -Force
+        $outdir = Join-Path $temp 'img-out'
+        $entry = Join-Path $outdir 'player_mdl'
+        if (-not (Test-Path $entry)) { $entry = Join-Path $outdir 'PLAYER.MDL' }
+
+        $before = (Get-Item $copy).Length
+        $ok = Run @('img-replace', $copy, 'PLAYER.MDL', $entry, '--dir', (Join-Path $temp 'lcs.dir')) -match 'replaced PLAYER.MDL'
+        $sameSize = (Get-Item $copy).Length -eq $before
+
+        $big = Join-Path $temp 'big.bin'
+        [System.IO.File]::WriteAllBytes($big, (New-Object byte[] 200000))
+        $refused = Run @('img-replace', $copy, 'PLAYER.MDL', $big, '--dir', (Join-Path $temp 'lcs.dir')) -match 'Growing an entry'
+
+        $ok -and $sameSize -and $refused
+    }
+
     Check "img-extract writes entries to disk" {
         $outdir = Join-Path $temp 'img-out'
         Run @('img-extract', $img, $outdir, '--dir', (Join-Path $temp 'lcs.dir')) | Out-Null

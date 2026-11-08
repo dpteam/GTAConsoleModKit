@@ -44,6 +44,10 @@ namespace ModKit.Cli
                         return ImgList(rest);
                     case "img-extract":
                         return ImgExtract(rest);
+                    case "img-replace":
+                        return ImgReplace(rest);
+                    case "img-pack":
+                        return ImgPack(rest);
                     case "dtz-inspect":
                         return DtzInspect(ctx, rest);
                     case "dtz-dat":
@@ -99,6 +103,8 @@ DPT.PSP GTA Modding Kit - headless commands
   iso-build <folder> [out.iso] [label] build an ISO 9660 image
   img-list <image.img> [dir]           list an IMG archive (uses .DIR when present)
   img-extract <img> [folder] [--dir <dir>]
+  img-replace <img> <entry> <file> [--dir <dir>]   put a file back into an entry
+  img-pack <folder> [out.img] [--ext .mdl]         build an IMG (+ .DIR) from a folder
   dtz-inspect <GAME.DTZ|GAME.DAT>      streaming table summary
   dtz-dat <GAME.DTZ> [out.dat]         inflate to GAME.DAT
   dtz-dtz <GAME.DAT> [out.dtz]         recompress to GAME.DTZ
@@ -221,6 +227,51 @@ Notes
             string target = args.Count > 1 ? args[1] : null;
             Operations.Outcome outcome = Operations.ImgExtract(args[0], directory, target,
                 delegate(string path, int percent) { });
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int ImgReplace(List<string> args)
+        {
+            string directory = null;
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (args[i] == "--dir" && i + 1 < args.Count)
+                {
+                    directory = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                }
+            }
+            if (args.Count < 3)
+                return Usage("img-replace <image.img> <entry> <file> [--dir <dir>]");
+            Operations.Outcome outcome = Operations.ImgReplace(args[0], directory, args[1], args[2]);
+            PrintOutcome(outcome);
+            return outcome.Ok ? 0 : 1;
+        }
+
+        private static int ImgPack(List<string> args)
+        {
+            string extension = null;
+            string directory = null;
+            for (int i = args.Count - 1; i >= 0; i--)
+            {
+                if (args[i] == "--ext" && i + 1 < args.Count)
+                {
+                    extension = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                }
+                else if (args[i] == "--dir" && i + 1 < args.Count)
+                {
+                    directory = args[i + 1];
+                    args.RemoveAt(i + 1);
+                    args.RemoveAt(i);
+                }
+            }
+            if (args.Count < 1) return Usage("img-pack <folder> [out.img] [--dir out.dir] [--ext .mdl]");
+            Operations.Outcome outcome = Operations.ImgPack(args[0], args.Count > 1 ? args[1] : null,
+                directory, extension, Progress());
             PrintOutcome(outcome);
             return outcome.Ok ? 0 : 1;
         }

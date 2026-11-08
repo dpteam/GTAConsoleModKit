@@ -64,6 +64,8 @@ ModKit.exe iso-extract <image.iso> [folder]
 ModKit.exe iso-build <folder> [out.iso] [label]
 ModKit.exe img-list <image.img> [dir]
 ModKit.exe img-extract <img> [folder] [--dir <dir>]
+ModKit.exe img-replace <img> <entry> <file> [--dir <dir>]
+ModKit.exe img-pack <folder> [out.img] [--ext .mdl]
 ModKit.exe dtz-inspect <GAME.DTZ|GAME.DAT>
 ModKit.exe dtz-dat <GAME.DTZ> [out.dat]
 ModKit.exe dtz-dtz <GAME.DAT> [out.dtz]

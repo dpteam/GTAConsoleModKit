@@ -161,21 +161,26 @@ namespace ModKit.Formats
             Log.Info(Cat.Fmt, "scanned " + Entries.Count + " chunks in " + System.IO.Path.GetFileName(Path));
         }
 
-        /// <summary>Name lookup that tolerates the extension being present or not.</summary>
+        /// <summary>
+        /// Name lookup that tolerates the extension being present or not. Exact
+        /// names win over bare names: "PLAYER.MDL" must not resolve to "PLAYER.CHK"
+        /// just because that one comes first in the archive.
+        /// </summary>
         public Entry Find(string name)
         {
             if (string.IsNullOrEmpty(name)) return null;
             string needle = name.Replace('\\', '/');
             int slash = needle.LastIndexOf('/');
             if (slash >= 0) needle = needle.Substring(slash + 1);
-            string bare = System.IO.Path.GetFileNameWithoutExtension(needle);
 
             foreach (Entry entry in Entries)
-            {
                 if (string.Equals(entry.Name, needle, StringComparison.OrdinalIgnoreCase)) return entry;
+
+            string bare = System.IO.Path.GetFileNameWithoutExtension(needle);
+            foreach (Entry entry in Entries)
                 if (string.Equals(System.IO.Path.GetFileNameWithoutExtension(entry.Name), bare,
                         StringComparison.OrdinalIgnoreCase)) return entry;
-            }
+
             return null;
         }
 
@@ -303,6 +308,75 @@ namespace ModKit.Formats
                 try { if (File.Exists(partial)) File.Delete(partial); } catch (Exception) { }
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Puts a file back into an existing entry. The entry keeps its sector
+        /// range, so the replacement must fit (the remainder is zero padded and the
+        /// streaming table in GAME.DAT keeps pointing at the right place).
+        /// Growing an entry would shift every following sector and invalidate the
+        /// game's streaming table, so it is refused with an explanation instead of
+        /// silently corrupting the archive.
+        /// </summary>
+        public bool Replace(Entry entry, string sourcePath, out string message)
+        {
+            if (entry == null)
+            {
+                message = "no such entry";
+                return false;
+            }
+            if (!File.Exists(sourcePath))
+            {
+                message = "no such file: " + sourcePath;
+                return false;
+            }
+
+            long capacity = entry.SizeBytes;
+            long length = new FileInfo(sourcePath).Length;
+            if (length > capacity)
+            {
+                message = string.Format(
+                    "file is {0} but the entry only holds {1} ({2} sectors). " +
+                    "Growing an entry shifts every following sector, which would break the " +
+                    "streaming table in GAME.DAT - rebuild the IMG instead (img-pack).",
+                    Util.HumanBytes(length), Util.HumanBytes(capacity), entry.SizeSectors);
+                return false;
+            }
+
+            var buffer = new byte[128 * 1024];
+            using (var target = new FileStream(Path, FileMode.Open, FileAccess.Write, FileShare.Read))
+            {
+                target.Position = entry.OffsetBytes;
+                using (var input = File.OpenRead(sourcePath))
+                {
+                    long copied = 0;
+                    while (copied < length)
+                    {
+                        int want = (int)Math.Min(buffer.Length, length - copied);
+                        int read = input.Read(buffer, 0, want);
+                        if (read <= 0) break;
+                        target.Write(buffer, 0, read);
+                        copied += read;
+                    }
+                }
+
+                long remaining = capacity - length;
+                if (remaining > 0)
+                {
+                    Array.Clear(buffer, 0, buffer.Length);
+                    while (remaining > 0)
+                    {
+                        int want = (int)Math.Min(buffer.Length, remaining);
+                        target.Write(buffer, 0, want);
+                        remaining -= want;
+                    }
+                }
+            }
+
+            message = string.Format("replaced {0}: {1} of {2} used", entry.Name,
+                Util.HumanBytes(length), Util.HumanBytes(capacity));
+            Log.Info(Cat.Fmt, message);
+            return true;
         }
 
         private static class Sector

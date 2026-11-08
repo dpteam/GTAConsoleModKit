@@ -536,6 +536,14 @@ namespace ModKit.Web
                         outcome = Operations.ImgExtract(resolvedSource, extra, resolvedTarget,
                             delegate(string path, int percent) { progress(percent); });
                         break;
+                    case "img-replace":
+                        outcome = Operations.ImgReplace(resolvedSource, extra,
+                            Json.GetString(body, "entry", ""), resolvedTarget);
+                        break;
+                    case "img-pack":
+                        outcome = Operations.ImgPack(resolvedSource, resolvedTarget, extra,
+                            Json.GetString(body, "extension", ""), progress);
+                        break;
                     case "dtz-inspect":
                         outcome = Operations.DtzInspect(resolvedSource, ctx.ModelNameFile(
                             project != null && project.Game == "VCS" ? "VCS" : "LCS"));

@@ -137,7 +137,70 @@ namespace ModKit
             };
         }
 
-        // ---------------------------------------------------------------- DTZ
+        public static Outcome ImgReplace(string image, string directory, string entryName,
+            string sourcePath)
+        {
+            if (!File.Exists(image)) return Outcome.Fail("no such IMG: " + image);
+            if (!File.Exists(sourcePath)) return Outcome.Fail("no such file: " + sourcePath);
+
+            ImgArchive archive = ImgArchive.Open(image, directory);
+            ImgArchive.Entry entry = archive.Find(entryName);
+            if (entry == null)
+                return Outcome.Fail("no entry '" + entryName + "' in " + Path.GetFileName(image));
+
+            string message;
+            bool ok = archive.Replace(entry, sourcePath, out message);
+            if (!ok) return Outcome.Fail(message);
+
+            return new Outcome
+            {
+                Ok = true,
+                Message = message,
+                Data = Json.O("img", image, "entry", entry.Name,
+                    "offset", entry.OffsetSectors, "sectors", entry.SizeSectors,
+                    "bytes", new FileInfo(sourcePath).Length)
+            };
+        }
+
+        public static Outcome ImgPack(string folder, string target, string directory,
+            string extension, Action<int> progress)
+        {
+            if (!Directory.Exists(folder)) return Outcome.Fail("no such folder: " + folder);
+            if (string.IsNullOrEmpty(target))
+                target = Path.GetFullPath(folder.TrimEnd('\\', '/')) + ".img";
+
+            var entries = new List<ImgArchive.Entry>();
+            foreach (string file in Directory.GetFiles(folder))
+            {
+                string name = Path.GetFileName(file);
+                if (!string.IsNullOrEmpty(extension) &&
+                    !name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                entries.Add(new ImgArchive.Entry
+                {
+                    Name = name,
+                    SourcePath = file
+                });
+            }
+
+            if (entries.Count == 0) return Outcome.Fail("no files to pack in " + folder);
+            entries.Sort(delegate(ImgArchive.Entry a, ImgArchive.Entry b)
+            {
+                return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+            });
+
+            string dirPath = string.IsNullOrEmpty(directory) ? Path.ChangeExtension(target, ".dir") : directory;
+            ImgArchive.Build(target, dirPath, entries, progress);
+            return new Outcome
+            {
+                Ok = true,
+                Message = "packed " + entries.Count + " entries into " + Path.GetFileName(target),
+                Data = Json.O("img", target, "dir", dirPath, "entries", (long)entries.Count,
+                    "size", new FileInfo(target).Length)
+            };
+        }
+
+        // ---------------------------------------------------------------- DTZ        // ---------------------------------------------------------------- DTZ
 
         public static Outcome DtzInspect(string source, string namesPath)
         {
